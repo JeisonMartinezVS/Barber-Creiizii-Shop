@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+@config "../tailwind.config.json";
+
+body {
+  @apply bg-black font-sans;
+}

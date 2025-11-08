@@ -1,0 +1,40 @@
+{
+  "theme": {
+    "extend": {
+      "colors": {
+        "background": "#0a0a0a",
+        "foreground": "#f2f2f2",
+        "card": "#1a1a1a",
+        "card-foreground": "#f2f2f2",
+        "popover": "#121212",
+        "popover-foreground": "#f2f2f2",
+        "primary": "#d4af37",
+        "primary-foreground": "#0a0a0a",
+        "secondary": "#3a3a3a",
+        "secondary-foreground": "#f2f2f2",
+        "muted": "#2a2a2a",
+        "muted-foreground": "#999999",
+        "accent": "#d4af37",
+        "accent-foreground": "#0a0a0a",
+        "destructive": "#dc2626",
+        "destructive-foreground": "#f2f2f2",
+        "border": "#4d4d4d",
+        "input": "#333333",
+        "ring": "#d4af37",
+        "chart-1": "#d4af37",
+        "chart-2": "#999999",
+        "chart-3": "#666666",
+        "chart-4": "#e0c45c",
+        "chart-5": "#c2a634",
+        "sidebar": "#1a1a1a",
+        "sidebar-foreground": "#f2f2f2",
+        "sidebar-primary": "#d4af37",
+        "sidebar-primary-foreground": "#0a0a0a",
+        "sidebar-accent": "#2a2a2a",
+        "sidebar-accent-foreground": "#f2f2f2",
+        "sidebar-border": "#4d4d4d",
+        "sidebar-ring": "#d4af37"
+      }
+    }
+  }
+}
