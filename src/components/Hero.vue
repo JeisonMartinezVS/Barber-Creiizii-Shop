@@ -32,7 +32,7 @@ export default defineComponent({
     <!-- Contenido dentro del marco -->
     <div class="relative z-10 flex flex-col items-center justify-center gap-4">
       <img src="../../public/logo.jpg" alt="" class="h-80 object-contain" />
-      <h2 class="text-white text-5xl font-bold">{{ config.Titulo }}</h2>
+      <h2 class="text-white text-5xl font-bold">{{ config?.Titulo }}</h2>
       <p class="text-gray-300 max-w-xl">
         Donde la tradición se encuentra con la modernidad. Cada corte es una obra de arte diseñado
         para realzar tu personalidad.
