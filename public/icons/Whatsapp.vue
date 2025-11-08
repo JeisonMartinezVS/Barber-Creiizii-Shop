@@ -7,7 +7,7 @@
     aria-label="WhatsApp"
   >
     <svg
-      class="w-5 h-5 text-primary group-hover:scale-110 transition-transform"
+      class="w-5 h-5 group-hover:scale-110 transition-transform"
       fill="currentColor"
       viewBox="0 0 24 24"
     >

@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import Header from './components/Header.vue'
-import Hero from './components/Hero.vue'
+import Footer from './components/Footer.vue'
 </script>
 
 <template>
   <Header />
-  <Hero />
+  <main class="pt-16">
+    <router-view />
+  </main>
+  <Footer />
 </template>
 
 <style scoped>

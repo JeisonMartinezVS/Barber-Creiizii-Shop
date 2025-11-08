@@ -1,16 +1,30 @@
-<script setup lang="ts">
+<script lang="ts">
 import Whatsapp from '../../public/icons/Whatsapp.vue'
 import Instagram from '../../public/icons/Instagram.vue'
-const menu = [
-  { name: 'Inicio', link: '/' },
-  { name: 'Servicios', link: '/products' },
-  { name: 'Contacto', link: '/about' },
-  { name: 'Producto', link: '/contact' },
-]
+import { defineComponent, getCurrentInstance, computed } from 'vue'
+
+export default defineComponent({
+  components: {
+    Whatsapp,
+    Instagram,
+  },
+  setup() {
+    const { proxy } = getCurrentInstance() as any
+
+    // accedemos al plugin global
+    const config = computed(() => proxy.$config)
+
+    return {
+      config,
+    }
+  },
+})
 </script>
 
 <template>
-  <header class="w-full text-neutral-50 border-b border-neutral-800 p-4">
+  <header
+    class="fixed top-0 left-0 w-full bg-background text-neutral-50 border-b border-neutral-800 p-4 z-50"
+  >
     <div class="flex justify-between items-center max-w-10/12 mx-auto">
       <!-- Logo -->
       <div class="flex items-center gap-2">
@@ -19,11 +33,12 @@ const menu = [
 
       <!-- Menu -->
       <div class="hidden md:flex justify-center items-center gap-4">
-        <a
-          v-for="value in menu"
-          :href="value.link"
+        <router-link
+          v-for="value in config?.menu"
+          :key="value.name"
+          :to="value.link"
           class="text-base font-bold hover:text-yellow-400"
-          >{{ value.name }}</a
+          >{{ value.name }}</router-link
         >
       </div>
 
