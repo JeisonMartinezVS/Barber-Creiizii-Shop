@@ -6,7 +6,7 @@ import {
   onAuthStateChanged,
   type User,
 } from 'firebase/auth'
-import { auth } from '../config/firebase.js'
+import { auth } from '../config/firebase'
 
 // The login screen shows a "usuario" field, but Firebase Auth needs an email.
 // If the person doesn't type "@", we build one using this fixed domain, so no
