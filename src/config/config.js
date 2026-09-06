@@ -1,7 +1,7 @@
 // src/config/config.js
 import { reactive } from 'vue'
 import { doc, onSnapshot } from 'firebase/firestore'
-import { db } from './firebase.js'
+import { db } from './firebase'
 
 // Configuración reactiva global (default values para evitar errores)
 export const globalConfig = reactive({
