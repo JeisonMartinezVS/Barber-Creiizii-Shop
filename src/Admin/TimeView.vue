@@ -28,7 +28,9 @@ const schedule = ref<DaySchedule[]>([
   { label: 'Sábado', enabled: true, start: '10:00', end: '22:00' },
 ])
 
-const today = computed(() => schedule.value[todayIndex])
+const today = computed<DaySchedule>(() => {
+  return schedule.value[todayIndex] ?? schedule.value[0]!
+})
 
 function saveSchedule() {
   // TODO: persist `schedule` for `selectedStaff` to Firestore.

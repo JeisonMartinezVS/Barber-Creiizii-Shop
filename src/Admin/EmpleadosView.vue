@@ -48,15 +48,15 @@ const empleados = ref<Empleado[]>([
 function initial(name: string) {
   return name.charAt(0).toUpperCase()
 }
-/*
+
 function editEmpleado(empleado: Empleado) {
-  // TODO: open an edit form/modal for this empleado.
+  console.log('Editar empleado:', empleado)
 }
 
 function deleteEmpleado(id: string) {
-  // TODO: confirm and delete from Firestore.
+  console.log('Eliminar empleado:', id)
 }
-*/
+
 function addEmpleado() {
   // TODO: open a "nuevo empleado" form/modal.
 }
