@@ -116,7 +116,7 @@ function initial(name: string) {
                   v-html="index < store.currentStepIndex ? checkIcon : stepIcons[step]"
                 ></span>
                 <span
-                  class="text-xs whitespace-nowrap"
+                  class="text-xs whitespace-nowrap hidden sm:block"
                   :class="index === store.currentStepIndex ? 'text-primary' : index < store.currentStepIndex ? 'text-white/60' : 'text-white/30'"
                 >
                   {{ step }}
