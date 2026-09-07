@@ -36,12 +36,11 @@ const routes = [
         name: 'Agenda',
         component: () => import('../Admin/AgendaView.vue'),
       },
-      // Add the rest of the sidebar sections as they get built:
-      // { path: 'reportes', name: 'reportes', component: () => import('@/views/reportes/ReportesView.vue') },
-      // { path: 'clientes', name: 'clientes', component: () => import('@/views/clientes/ClientesView.vue') },
-      // { path: 'empleados', name: 'empleados', component: () => import('@/views/empleados/EmpleadosView.vue') },
+      { path: 'reportes', name: 'reportes', component: () => import('../Admin/ReportView.vue') },
+      { path: 'clientes', name: 'clientes', component: () => import('../Admin/ClientsView.vue') },
+      { path: 'empleados', name: 'empleados', component: () => import('../Admin/EmpleadosView.vue') },
       // { path: 'productos', name: 'productos', component: () => import('@/views/productos/ProductosView.vue') },
-      // { path: 'horarios', name: 'horarios', component: () => import('@/views/horarios/HorariosView.vue') },
+      { path: 'horarios', name: 'horarios', component: () => import('../Admin/TimeView.vue') },
     ],
   },
 ]
