@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { formatCOP, STEPS, useBookingStore } from '../stores/booking'
 
 const store = useBookingStore()
@@ -58,8 +58,77 @@ const footerHint = computed(() => {
   return ''
 })
 
+// "Special" screens (stored booking / just confirmed) replace the whole
+// wizard chrome — no step counter, no breadcrumb, no wizard footer.
+const isSpecialScreen = computed(() => store.isConfirmed || store.showStoredBooking)
+
 function initial(name: string) {
   return name.charAt(0).toUpperCase()
+}
+
+const SHOP_ADDRESS = 'Cra. 95 #88-40, Aures II, Medellín, Antioquia, Colombia'
+
+function buildGoogleCalendarUrl(opts: { title: string; start: Date; durationMinutes: number; details: string }) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const fmt = (d: Date) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`
+  const end = new Date(opts.start.getTime() + opts.durationMinutes * 60000)
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: opts.title,
+    dates: `${fmt(opts.start)}/${fmt(end)}`,
+    details: opts.details,
+    location: SHOP_ADDRESS,
+  })
+  return `https://calendar.google.com/calendar/render?${params.toString()}`
+}
+
+// The button on the "just confirmed" success screen.
+const justConfirmedGCalUrl = computed(() => {
+  if (!store.selectedService || !store.selectedBarbero || !store.selectedDate || !store.selectedTime) return '#'
+  const [h = 0, m = 0] = store.selectedTime.split(':').map(Number)
+  const start = new Date(store.selectedDate)
+  start.setHours(h, m, 0, 0)
+  return buildGoogleCalendarUrl({
+    title: `${store.selectedService.name} — Barber Creiizii Shop`,
+    start,
+    durationMinutes: parseInt(store.selectedService.duration, 10) || 30,
+    details: `Cita con ${store.selectedBarbero.name} en Barber Creiizii Shop.`,
+  })
+})
+
+// The button on the "you already have a booking" screen (returning visit).
+const storedGCalUrl = computed(() => {
+  const b = store.storedBooking
+  if (!b) return '#'
+  return buildGoogleCalendarUrl({
+    title: `${b.serviceName} — Barber Creiizii Shop`,
+    start: new Date(b.dateTimeISO),
+    durationMinutes: parseInt(b.serviceDuration, 10) || 30,
+    details: `Cita con ${b.barberoName} en Barber Creiizii Shop.`,
+  })
+})
+
+const storedFechaLarga = computed(() => {
+  if (!store.storedBooking) return ''
+  const d = new Date(store.storedBooking.dateTimeISO)
+  const weekday = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][d.getDay()]
+  return `${weekday}, ${d.getDate()} de ${MONTHS[d.getMonth()]}`
+})
+
+// Local UI flag: once the person cancels from the "just booked" success
+// screen, swap its two buttons for a plain confirmation instead of leaving
+// a dead "cancel a cancelled booking" button.
+const cancelledJustNow = ref(false)
+
+async function handleCancelJustConfirmed() {
+  if (!store.lastCreatedCitaId) return
+  const ok = await store.cancelBooking(store.lastCreatedCitaId)
+  if (ok) cancelledJustNow.value = true
+}
+async function handleCancelStored() {
+  if (!store.storedBooking) return
+  const ok = await store.cancelBooking(store.storedBooking.citaId)
+  if (ok) store.startNewBooking()
 }
 </script>
 
@@ -75,7 +144,7 @@ function initial(name: string) {
           <div class="flex items-start justify-between px-6 pt-5 pb-4 border-b border-white/10 shrink-0">
             <div>
               <h2 class="font-serif text-xl font-bold text-white">Reservar Cita</h2>
-              <p v-if="!store.isConfirmed" class="text-xs text-primary mt-1">
+              <p v-if="!isSpecialScreen" class="text-xs text-primary mt-1">
                 Paso {{ store.currentStepIndex + 1 }} de {{ STEPS.length }} — {{ store.currentStep }}
               </p>
             </div>
@@ -94,7 +163,7 @@ function initial(name: string) {
 
           <!-- Step breadcrumb -->
           <div
-            v-if="!store.isConfirmed"
+            v-if="!isSpecialScreen"
             class="flex items-center justify-center gap-2 px-4 py-3 border-b border-white/10 overflow-x-auto shrink-0"
           >
             <template v-for="(step, index) in STEPS" :key="step">
@@ -128,8 +197,62 @@ function initial(name: string) {
 
           <!-- Body -->
           <div class="px-6 py-5 overflow-y-auto grow">
-            <!-- Success screen -->
-            <div v-if="store.isConfirmed" class="py-10 text-center">
+            <!-- Ya tienes una cita agendada (localStorage + verificación en Firestore) -->
+            <div v-if="store.showStoredBooking && store.storedBooking" class="py-6">
+              <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
+                  <path d="M16 2v4M8 2v4M3 10h18" />
+                </svg>
+              </div>
+              <h3 class="font-serif text-lg font-bold text-white text-center mb-1">Ya tienes una cita agendada</h3>
+              <p class="text-sm text-white/50 text-center mb-5">
+                {{ storedFechaLarga }} a las {{ store.storedBooking.time }} con {{ store.storedBooking.barberoName }}.
+              </p>
+
+              <div class="border border-white/10 rounded-xl p-4 mb-5 space-y-1.5">
+                <div class="flex items-center justify-between text-sm">
+                  <span class="text-white/50">Servicio</span>
+                  <span class="text-white font-semibold">{{ store.storedBooking.serviceName }}</span>
+                </div>
+                <div class="flex items-center justify-between text-sm">
+                  <span class="text-white/50">Barbero</span>
+                  <span class="text-white font-semibold">{{ store.storedBooking.barberoName }}</span>
+                </div>
+                <div class="flex items-center justify-between text-sm pt-1.5 border-t border-white/10">
+                  <span class="text-white/50">Total</span>
+                  <span class="text-primary font-bold">{{ formatCOP(store.storedBooking.total) }}</span>
+                </div>
+              </div>
+
+              <div class="flex gap-3 mb-3">
+                <button
+                  type="button"
+                  :disabled="store.isCancelling"
+                  class="flex-1 text-sm font-semibold text-white bg-red-600 hover:bg-red-500 disabled:opacity-50 rounded-lg py-2.5 transition"
+                  @click="handleCancelStored"
+                >
+                  {{ store.isCancelling ? 'Cancelando...' : 'Cancelar cita' }}
+                </button>
+                <a
+                  :href="storedGCalUrl"
+                  target="_blank"
+                  rel="noopener"
+                  class="flex-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-white border border-white/15 hover:border-white/30 rounded-lg py-2.5 transition"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
+                  </svg>
+                  Google Calendar
+                </a>
+              </div>
+              <button type="button" class="w-full text-sm font-semibold text-primary hover:underline py-1" @click="store.startNewBooking">
+                Agendar una nueva cita
+              </button>
+            </div>
+
+            <!-- Success screen (justo después de confirmar) -->
+            <div v-else-if="store.isConfirmed" class="py-8 text-center">
               <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="20 6 9 17 4 12" />
@@ -139,13 +262,43 @@ function initial(name: string) {
               <p class="text-sm text-white/50 mb-6">
                 Te esperamos {{ fechaLarga }} a las {{ store.selectedTime }} con {{ store.selectedBarbero?.name }}.
               </p>
-              <button
-                type="button"
-                class="bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] text-[#1a1408] font-semibold text-sm rounded-lg px-6 py-2.5 transition"
-                @click="store.close"
-              >
-                Cerrar
-              </button>
+
+              <template v-if="!cancelledJustNow">
+                <div class="flex gap-3 mb-3">
+                  <button
+                    type="button"
+                    :disabled="store.isCancelling"
+                    class="flex-1 text-sm font-semibold text-white bg-red-600 hover:bg-red-500 disabled:opacity-50 rounded-lg py-2.5 transition"
+                    @click="handleCancelJustConfirmed"
+                  >
+                    {{ store.isCancelling ? 'Cancelando...' : 'Cancelar cita' }}
+                  </button>
+                  <a
+                    :href="justConfirmedGCalUrl"
+                    target="_blank"
+                    rel="noopener"
+                    class="flex-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-white border border-white/15 hover:border-white/30 rounded-lg py-2.5 transition"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
+                    </svg>
+                    Google Calendar
+                  </a>
+                </div>
+                <button type="button" class="text-sm text-white/40 hover:text-white/70 transition" @click="store.close">
+                  Cerrar
+                </button>
+              </template>
+              <template v-else>
+                <p class="text-sm text-red-400 mb-4">Tu cita fue cancelada.</p>
+                <button
+                  type="button"
+                  class="bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] text-[#1a1408] font-semibold text-sm rounded-lg px-6 py-2.5 transition"
+                  @click="store.close"
+                >
+                  Cerrar
+                </button>
+              </template>
             </div>
 
             <!-- Saving state (between clicking Confirmar and Firestore responding) -->
@@ -439,7 +592,7 @@ function initial(name: string) {
           </div>
 
           <!-- Footer -->
-          <div v-if="!store.isConfirmed" class="flex items-center justify-between px-6 py-4 border-t border-white/10 shrink-0">
+          <div v-if="!isSpecialScreen" class="flex items-center justify-between px-6 py-4 border-t border-white/10 shrink-0">
             <button
               v-if="store.currentStepIndex > 0"
               type="button"

@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router'
 import Header from './components/Header.vue'
 import Footer from './components/Footer.vue'
 import ModalReservation from './components/ModalReservation.vue'
+import ActiveBookingBanner from './components/ActiveBookingBanner.vue'
 import { useBookingStore } from './stores/booking'
 
 const route = useRoute()
@@ -18,6 +19,7 @@ const isAdminRoute = computed(() => route.meta.layout === 'admin')
     <Header />
 
     <main class="pt-16">
+      <ActiveBookingBanner />
       <router-view />
     </main>
 

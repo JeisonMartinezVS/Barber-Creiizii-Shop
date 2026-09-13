@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
-import { addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore'
+import { addDoc, collection, doc, getDoc, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore'
 import { db } from '../config/firebase'
 
 export interface Barbero {
@@ -28,6 +28,18 @@ export interface Product {
   name: string
   brand: string
   price: number
+}
+
+export interface StoredBooking {
+  citaId: string
+  customerName: string
+  barberoName: string
+  serviceName: string
+  serviceDuration: string
+  dateTimeISO: string
+  time: string
+  total: number
+  status: string
 }
 
 export const STEPS = ['Barbero', 'Servicio', 'Fecha', 'Datos', 'Productos'] as const
@@ -86,11 +98,29 @@ const PRODUCTS: Product[] = [
   { id: 'gel-mate', name: 'Gel Acabado Mate', brand: 'Wella', price: 28000 },
 ]
 
+const STORAGE_KEY = 'creiizii_last_booking'
+const INACTIVE_STATUSES = ['cancelada', 'completada', 'no_asistio']
+
 function combineDateAndTime(date: Date, time: string): Date {
   const [hours = 0, minutes = 0] = time.split(':').map(Number)
   const combined = new Date(date)
   combined.setHours(hours, minutes, 0, 0)
   return combined
+}
+
+function readStoredBooking(): StoredBooking | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? (JSON.parse(raw) as StoredBooking) : null
+  } catch {
+    return null
+  }
+}
+function writeStoredBooking(booking: StoredBooking) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(booking))
+}
+function clearStoredBooking() {
+  localStorage.removeItem(STORAGE_KEY)
 }
 
 export const useBookingStore = defineStore('booking', () => {
@@ -116,6 +146,17 @@ export const useBookingStore = defineStore('booking', () => {
     email: '',
     notes: '',
   })
+
+  // The cita just created in this session (drives the success screen's
+  // Cancelar/Google-Calendar buttons).
+  const lastCreatedCitaId = ref<string | null>(null)
+
+  // A booking remembered from a previous visit (localStorage), shown instead
+  // of the wizard when the modal opens.
+  const storedBooking = ref<StoredBooking | null>(null)
+  const showStoredBooking = ref(false)
+  const isCancelling = ref(false)
+  let hasCheckedStorage = false
 
   const currentStep = computed<StepName>(() => STEPS[currentStepIndex.value] ?? STEPS[0])
 
@@ -143,17 +184,54 @@ export const useBookingStore = defineStore('booking', () => {
     () => customer.name.trim().length > 0 && customer.phone.trim().length > 0,
   )
 
-  function open() {
-    reset()
+  // --- Remembering a booking across visits ---------------------------------
+
+  // Re-checks localStorage + Firestore. Safe to call more than once (e.g.
+  // once on page load for a banner, again when the modal opens) — cheap and
+  // idempotent.
+  async function refreshStoredBooking() {
+    const stored = readStoredBooking()
+    if (!stored || new Date(stored.dateTimeISO).getTime() <= Date.now()) {
+      storedBooking.value = null
+      clearStoredBooking()
+      hasCheckedStorage = true
+      return
+    }
+    try {
+      const snap = await getDoc(doc(db, 'citas', stored.citaId))
+      if (snap.exists() && !INACTIVE_STATUSES.includes(snap.data().status)) {
+        storedBooking.value = { ...stored, status: snap.data().status }
+      } else {
+        storedBooking.value = null
+        clearStoredBooking()
+      }
+    } catch {
+      // Offline or blocked — fall back to trusting the local copy rather
+      // than hiding a real upcoming appointment.
+      storedBooking.value = stored
+    }
+    hasCheckedStorage = true
+  }
+
+  async function open() {
     isOpen.value = true
+    isConfirmed.value = false
+    submitError.value = null
+    if (!hasCheckedStorage) await refreshStoredBooking()
+
+    if (storedBooking.value) {
+      showStoredBooking.value = true
+    } else {
+      startNewBooking()
+    }
   }
   function close() {
     isOpen.value = false
   }
-  function reset() {
+
+  function startNewBooking() {
+    showStoredBooking.value = false
     currentStepIndex.value = 0
-    isConfirmed.value = false
-    submitError.value = null
     selectedBarberoId.value = null
     selectedServiceId.value = null
     selectedDate.value = null
@@ -207,7 +285,7 @@ export const useBookingStore = defineStore('booking', () => {
     try {
       const dateTime = combineDateAndTime(selectedDate.value, selectedTime.value)
 
-      await addDoc(collection(db, 'citas'), {
+      const docRef = await addDoc(collection(db, 'citas'), {
         barberoId: selectedBarbero.value.id,
         barberoName: selectedBarbero.value.name,
         serviceId: selectedService.value.id,
@@ -229,12 +307,47 @@ export const useBookingStore = defineStore('booking', () => {
         createdAt: serverTimestamp(),
       })
 
+      lastCreatedCitaId.value = docRef.id
       isConfirmed.value = true
+
+      const record: StoredBooking = {
+        citaId: docRef.id,
+        customerName: customer.name.trim(),
+        barberoName: selectedBarbero.value.name,
+        serviceName: selectedService.value.name,
+        serviceDuration: selectedService.value.duration,
+        dateTimeISO: dateTime.toISOString(),
+        time: selectedTime.value,
+        total: total.value,
+        status: 'pendiente',
+      }
+      writeStoredBooking(record)
+      storedBooking.value = record
     } catch (err) {
       console.error('No se pudo guardar la cita', err)
       submitError.value = 'No se pudo guardar tu cita. Intenta de nuevo o escríbenos por WhatsApp.'
     } finally {
       isSubmitting.value = false
+    }
+  }
+
+  // Used by both the "just booked" success screen and the "you already have
+  // a booking" screen — same underlying action either way.
+  async function cancelBooking(citaId: string): Promise<boolean> {
+    isCancelling.value = true
+    try {
+      await updateDoc(doc(db, 'citas', citaId), { status: 'cancelada' })
+      if (storedBooking.value?.citaId === citaId) {
+        storedBooking.value = null
+        clearStoredBooking()
+        showStoredBooking.value = false
+      }
+      return true
+    } catch (err) {
+      console.error('No se pudo cancelar la cita', err)
+      return false
+    } finally {
+      isCancelling.value = false
     }
   }
 
@@ -254,6 +367,10 @@ export const useBookingStore = defineStore('booking', () => {
     selectedTime,
     selectedProductIds,
     customer,
+    lastCreatedCitaId,
+    storedBooking,
+    showStoredBooking,
+    isCancelling,
     selectedBarbero,
     allServices,
     selectedService,
@@ -263,7 +380,8 @@ export const useBookingStore = defineStore('booking', () => {
     isDatosValid,
     open,
     close,
-    reset,
+    startNewBooking,
+    refreshStoredBooking,
     goToStep,
     next,
     back,
@@ -273,5 +391,6 @@ export const useBookingStore = defineStore('booking', () => {
     selectTime,
     toggleProduct,
     confirmBooking,
+    cancelBooking,
   }
 })
