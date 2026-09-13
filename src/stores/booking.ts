@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
 import { addDoc, collection, doc, getDoc, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore'
+import { getFunctions, httpsCallable } from 'firebase/functions'
 import { db } from '../config/firebase'
 
 export interface Barbero {
@@ -108,6 +109,15 @@ function combineDateAndTime(date: Date, time: string): Date {
   return combined
 }
 
+// Colombia has no DST, but toISOString() still converts to UTC — for
+// evening appointments (7pm+) that rolls the calendar date to the next day.
+// This keeps the LOCAL calendar date instead, which is what "date" should
+// mean here (matching what the person actually picked on screen).
+export function formatLocalDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 function readStoredBooking(): StoredBooking | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -157,6 +167,34 @@ export const useBookingStore = defineStore('booking', () => {
   const showStoredBooking = ref(false)
   const isCancelling = ref(false)
   let hasCheckedStorage = false
+
+  // Times already taken for the selected barbero + selected date — filled by
+  // fetchBookedTimes(), which calls the getBookedTimes Cloud Function (the
+  // public site has no direct read access to query the citas collection).
+  const bookedTimes = ref<string[]>([])
+  const isLoadingBookedTimes = ref(false)
+  const functions = getFunctions()
+
+  async function fetchBookedTimes() {
+    if (!selectedBarberoId.value || !selectedDate.value) {
+      bookedTimes.value = []
+      return
+    }
+    isLoadingBookedTimes.value = true
+    try {
+      const getBookedTimesFn = httpsCallable(functions, 'getBookedTimes')
+      const result = await getBookedTimesFn({
+        barberoId: selectedBarberoId.value,
+        date: formatLocalDate(selectedDate.value),
+      })
+      bookedTimes.value = ((result.data as { times: string[] })?.times) ?? []
+    } catch (err) {
+      console.error('No se pudieron cargar los horarios ocupados', err)
+      bookedTimes.value = []
+    } finally {
+      isLoadingBookedTimes.value = false
+    }
+  }
 
   const currentStep = computed<StepName>(() => STEPS[currentStepIndex.value] ?? STEPS[0])
 
@@ -255,6 +293,7 @@ export const useBookingStore = defineStore('booking', () => {
 
   function selectBarbero(id: string) {
     selectedBarberoId.value = id
+    if (selectedDate.value) fetchBookedTimes()
     next()
   }
   function selectService(id: string) {
@@ -263,6 +302,8 @@ export const useBookingStore = defineStore('booking', () => {
   }
   function selectDate(date: Date) {
     selectedDate.value = date
+    selectedTime.value = null // availability changed — force re-picking the time
+    fetchBookedTimes()
   }
   function selectTime(time: string) {
     selectedTime.value = time
@@ -295,7 +336,7 @@ export const useBookingStore = defineStore('booking', () => {
         products: selectedProducts.value.map((p) => ({ id: p.id, name: p.name, price: p.price })),
         total: total.value,
         dateTime: Timestamp.fromDate(dateTime),
-        date: dateTime.toISOString().slice(0, 10), // "YYYY-MM-DD", handy for simple date filtering
+        date: formatLocalDate(dateTime), // "YYYY-MM-DD", local calendar date — handy for filtering
         time: selectedTime.value,
         customerName: customer.name.trim(),
         customerPhone: customer.phone.trim(),
@@ -371,6 +412,8 @@ export const useBookingStore = defineStore('booking', () => {
     storedBooking,
     showStoredBooking,
     isCancelling,
+    bookedTimes,
+    isLoadingBookedTimes,
     selectedBarbero,
     allServices,
     selectedService,

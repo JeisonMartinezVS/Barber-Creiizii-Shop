@@ -33,14 +33,31 @@ function isSameDay(a: Date, b: Date) {
   return a.toDateString() === b.toDateString()
 }
 
+// Appointments need at least this much lead time — also means "10:00" never
+// shows up as bookable at 10:05am, only from the next slot forward.
+const MIN_LEAD_MINUTES = 30
+
 const timeSlots = computed(() => {
-  const slots: string[] = []
+  const allSlots: string[] = []
   for (let minutes = 10 * 60; minutes <= 20 * 60 + 30; minutes += 30) {
     const h = Math.floor(minutes / 60)
     const m = minutes % 60
-    slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+    allSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
   }
-  return slots
+
+  let result = allSlots.filter((slot) => !store.bookedTimes.includes(slot))
+
+  if (store.selectedDate && isSameDay(store.selectedDate, new Date())) {
+    const cutoff = new Date(Date.now() + MIN_LEAD_MINUTES * 60000)
+    result = result.filter((slot) => {
+      const [h = 0, m = 0] = slot.split(':').map(Number)
+      const slotDate = new Date(store.selectedDate as Date)
+      slotDate.setHours(h, m, 0, 0)
+      return slotDate > cutoff
+    })
+  }
+
+  return result
 })
 
 const fechaLarga = computed(() => {
@@ -420,7 +437,11 @@ async function handleCancelStored() {
               </div>
 
               <p class="text-xs tracking-wide text-white/40 mb-3">HORARIOS DISPONIBLES</p>
-              <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              <p v-if="store.isLoadingBookedTimes" class="text-sm text-white/30 py-4 text-center">Cargando horarios...</p>
+              <p v-else-if="timeSlots.length === 0" class="text-sm text-white/30 py-4 text-center">
+                No quedan horarios disponibles para este día.
+              </p>
+              <div v-else class="grid grid-cols-3 sm:grid-cols-6 gap-2">
                 <button
                   v-for="slot in timeSlots"
                   :key="slot"

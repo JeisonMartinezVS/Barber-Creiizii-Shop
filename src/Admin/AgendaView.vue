@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore'
 import { db } from '../config/firebase'
-import { BARBEROS } from '../stores/booking'
+import { BARBEROS, formatLocalDate } from '../stores/booking'
 import StatCard from '../components/dashboard/StatCard.vue'
 
 type CitaStatus = 'pendiente' | 'confirmada' | 'completada' | 'cancelada' | 'no_asistio'
@@ -110,7 +110,7 @@ const groupedCitas = computed<CitaGroup[]>(() => {
 
 // --- Stats --------------------------------------------------------------
 function isToday(dateStr: string) {
-  return dateStr === new Date().toISOString().slice(0, 10)
+  return dateStr === formatLocalDate(new Date())
 }
 function isThisMonth(dateStr: string) {
   const today = new Date()
