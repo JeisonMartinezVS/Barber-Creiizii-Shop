@@ -116,7 +116,7 @@ function initial(name: string) {
                   v-html="index < store.currentStepIndex ? checkIcon : stepIcons[step]"
                 ></span>
                 <span
-                  class="text-xs whitespace-nowrap hidden sm:block"
+                  class="text-xs whitespace-nowrap"
                   :class="index === store.currentStepIndex ? 'text-primary' : index < store.currentStepIndex ? 'text-white/60' : 'text-white/30'"
                 >
                   {{ step }}
@@ -146,6 +146,12 @@ function initial(name: string) {
               >
                 Cerrar
               </button>
+            </div>
+
+            <!-- Saving state (between clicking Confirmar and Firestore responding) -->
+            <div v-else-if="store.isSubmitting && store.currentStep === 'Productos'" class="py-16 text-center">
+              <div class="w-8 h-8 mx-auto mb-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin"></div>
+              <p class="text-sm text-white/40">Guardando tu cita...</p>
             </div>
 
             <!-- Step 1: Barbero -->
@@ -428,6 +434,7 @@ function initial(name: string) {
                   <span class="text-lg font-bold text-primary">{{ formatCOP(store.total) }}</span>
                 </div>
               </div>
+              <p v-if="store.submitError" class="text-xs text-red-400 mt-3">{{ store.submitError }}</p>
             </template>
           </div>
 
@@ -471,11 +478,12 @@ function initial(name: string) {
             <button
               v-else-if="store.currentStep === 'Productos'"
               type="button"
-              class="flex items-center gap-1.5 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
+              :disabled="store.isSubmitting"
+              class="flex items-center gap-1.5 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] disabled:opacity-50 text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
               @click="store.confirmBooking"
             >
-              Confirmar — {{ formatCOP(store.total) }}
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12" /></svg>
+              {{ store.isSubmitting ? 'Guardando...' : `Confirmar — ${formatCOP(store.total)}` }}
+              <svg v-if="!store.isSubmitting" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12" /></svg>
             </button>
           </div>
         </div>

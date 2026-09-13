@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, onUnmounted, reactive, ref } from 'vue'
+import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
+import { getFunctions, httpsCallable } from 'firebase/functions'
+import { db } from '../config/firebase'
+import { useAuthStore } from '../stores/auth'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
 import ToggleSwitch from '../ui/ToggleSwitch.vue'
 
@@ -13,37 +17,19 @@ interface Empleado {
   active: boolean
 }
 
-// TODO: replace with real staff fetched from Firestore. These three match the
-// accounts created in Firebase Auth for the login screen (admin/yeison/camilo).
-const empleados = ref<Empleado[]>([
-  {
-    id: '1',
-    name: 'Administrador',
-    role: 'admin',
-    username: 'admin',
-    email: 'admin@creiizii.com',
-    phone: '+57 300 628 2601',
-    active: true,
-  },
-  {
-    id: '2',
-    name: 'Yeison Creiizii',
-    role: 'empleado',
-    username: 'yeison',
-    email: 'yeison@creiizii.com',
-    phone: '+57 311 000 0001',
-    active: true,
-  },
-  {
-    id: '3',
-    name: 'Camilo Estilo',
-    role: 'empleado',
-    username: 'camilo',
-    email: 'camilo@creiizii.com',
-    phone: '+57 311 000 0002',
-    active: true,
-  },
-])
+const authStore = useAuthStore()
+const functions = getFunctions()
+
+const empleados = ref<Empleado[]>([])
+let unsubscribe: (() => void) | null = null
+
+onMounted(() => {
+  const q = query(collection(db, 'empleados'), orderBy('name'))
+  unsubscribe = onSnapshot(q, (snapshot) => {
+    empleados.value = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Empleado)
+  })
+})
+onUnmounted(() => unsubscribe?.())
 
 function initial(name: string) {
   return name.charAt(0).toUpperCase()
@@ -52,13 +38,66 @@ function initial(name: string) {
 function editEmpleado(empleado: Empleado) {
   console.log('Editar empleado:', empleado)
 }
-
 function deleteEmpleado(id: string) {
   console.log('Eliminar empleado:', id)
 }
 
-function addEmpleado() {
-  // TODO: open a "nuevo empleado" form/modal.
+// --- Modal: nuevo empleado -------------------------------------------------
+const isModalOpen = ref(false)
+const isSubmitting = ref(false)
+const formError = ref('')
+const showPassword = ref(false)
+
+const form = reactive({
+  name: '',
+  email: '',
+  phone: '',
+  password: '',
+})
+
+function openModal() {
+  form.name = ''
+  form.email = ''
+  form.phone = ''
+  form.password = ''
+  formError.value = ''
+  showPassword.value = false
+  isModalOpen.value = true
+}
+function closeModal() {
+  if (isSubmitting.value) return
+  isModalOpen.value = false
+}
+
+async function submitNewEmployee() {
+  formError.value = ''
+
+  if (!form.name.trim() || !form.email.trim() || !form.password) {
+    formError.value = 'Nombre, correo y contraseña son obligatorios.'
+    return
+  }
+  if (form.password.length < 6) {
+    formError.value = 'La contraseña debe tener al menos 6 caracteres.'
+    return
+  }
+
+  isSubmitting.value = true
+  try {
+    const createEmployee = httpsCallable(functions, 'createEmployee')
+    await createEmployee({
+      name: form.name.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim(),
+      password: form.password,
+    })
+    // No need to manually add it to `empleados` — the onSnapshot listener
+    // above picks up the new Firestore doc automatically.
+    isModalOpen.value = false
+  } catch (err: any) {
+    formError.value = err?.message ?? 'No se pudo crear el empleado.'
+  } finally {
+    isSubmitting.value = false
+  }
 }
 </script>
 
@@ -69,9 +108,10 @@ function addEmpleado() {
     <div class="flex items-center justify-between mb-4">
       <h1 class="font-serif text-xl font-bold text-white">Empleados</h1>
       <button
+        v-if="authStore.isAdmin"
         type="button"
         class="flex items-center gap-2 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
-        @click="addEmpleado"
+        @click="openModal"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="12" y1="5" x2="12" y2="19" />
@@ -113,8 +153,7 @@ function addEmpleado() {
             <p class="text-xs text-white/40">{{ empleado.phone }}</p>
           </div>
         </div>
-
-        <div class="flex items-center gap-2">
+        <div v-if="authStore.isAdmin" class="flex items-center gap-2">
           <ToggleSwitch v-model="empleado.active" />
           <button
             type="button"
@@ -140,6 +179,128 @@ function addEmpleado() {
           </button>
         </div>
       </div>
+
+      <p v-if="empleados.length === 0" class="text-sm text-white/30 text-center py-10">
+        Sin empleados registrados todavía.
+      </p>
     </div>
+
+    <!-- Modal: nuevo empleado -->
+    <Teleport to="body">
+      <div v-if="isModalOpen" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
+        <div class="w-full max-w-md bg-[#0e0e0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+          <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/10">
+            <h2 class="font-serif text-lg font-bold text-white">Nuevo empleado</h2>
+            <button
+              type="button"
+              class="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-white/50 hover:text-white hover:border-white/30 transition"
+              aria-label="Cerrar"
+              @click="closeModal"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+
+          <form class="px-6 py-5 space-y-4" @submit.prevent="submitNewEmployee">
+            <!-- Foto: UI only for now, not wired up yet -->
+            <div class="flex flex-col items-center gap-2 mb-2">
+              <div
+                class="w-16 h-16 rounded-full border border-dashed border-white/20 flex items-center justify-center text-white/30"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z" />
+                  <circle cx="12" cy="13" r="4" />
+                </svg>
+              </div>
+              <button
+                type="button"
+                disabled
+                class="text-xs text-white/30 border border-white/10 rounded-lg px-3 py-1.5 cursor-not-allowed"
+              >
+                Subir foto (próximamente)
+              </button>
+            </div>
+
+            <div>
+              <label class="block text-xs tracking-wide text-white/40 mb-1.5">NOMBRE COMPLETO</label>
+              <input
+                v-model="form.name"
+                type="text"
+                placeholder="Nombre del empleado"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs tracking-wide text-white/40 mb-1.5">CORREO</label>
+              <input
+                v-model="form.email"
+                type="email"
+                placeholder="empleado@creiizii.com"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs tracking-wide text-white/40 mb-1.5">CELULAR</label>
+              <input
+                v-model="form.phone"
+                type="tel"
+                placeholder="+57 300 000 0000"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs tracking-wide text-white/40 mb-1.5">CONTRASEÑA</label>
+              <div class="relative">
+                <input
+                  v-model="form.password"
+                  :type="showPassword ? 'text' : 'password'"
+                  placeholder="Mínimo 6 caracteres"
+                  class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 pr-10 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
+                />
+                <button
+                  type="button"
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition"
+                  @click="showPassword = !showPassword"
+                >
+                  <svg v-if="!showPassword" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" /><circle cx="12" cy="12" r="3" />
+                  </svg>
+                  <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 7 11 7a21.6 21.6 0 0 1-3.24 4.39M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <p v-if="formError" class="text-xs text-red-400">{{ formError }}</p>
+
+            <div class="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                class="text-sm text-white/50 hover:text-white transition"
+                :disabled="isSubmitting"
+                @click="closeModal"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                :disabled="isSubmitting"
+                class="bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] disabled:opacity-50 text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
+              >
+                {{ isSubmitting ? 'Creando...' : 'Crear empleado' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>

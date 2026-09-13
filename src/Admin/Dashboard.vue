@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -43,7 +43,7 @@ const navItems: NavItem[] = [
   {
     name: 'productos',
     label: 'Productos',
-    enabled: true,
+    enabled: false,
     icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`,
   },
   {
@@ -60,14 +60,59 @@ function goTo(item: NavItem) {
 
 async function handleLogout() {
   await authStore.logout()
-  router.push({ name: 'login' })
+  router.push({ name: 'Login' })
 }
 </script>
 
 <template>
-  <div class="min-h-screen flex bg-[#050505]">
-    <!-- Sidebar -->
-    <aside class="w-60 shrink-0 border-r border-white/10 flex flex-col justify-between">
+  <div class="min-h-screen flex flex-col md:flex-row bg-[#050505]">
+    <!-- ===== Mobile top bar + horizontal nav (< md) ===== -->
+    <div class="md:hidden border-b border-white/10 sticky top-0 bg-[#050505] z-20">
+      <div class="flex items-center justify-between px-4 py-3">
+        <div class="flex items-center gap-2">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[#c9a24b]">
+            <circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" />
+            <line x1="20" y1="4" x2="8.12" y2="15.88" /><line x1="14.47" y1="14.48" x2="20" y2="20" /><line x1="8.12" y1="8.12" x2="12" y2="12" />
+          </svg>
+          <span class="text-white font-serif font-bold text-base">Admin</span>
+        </div>
+        <button
+          type="button"
+          class="w-8 h-8 flex items-center justify-center text-white/50 hover:text-white transition"
+          aria-label="Cerrar sesión"
+          @click="handleLogout"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+        </button>
+      </div>
+
+      <nav class="flex overflow-x-auto px-2 pb-2 gap-1">
+        <button
+          v-for="item in navItems"
+          :key="item.name"
+          type="button"
+          class="flex flex-col items-center gap-1 px-3 py-1.5 rounded-lg shrink-0 border-b-2 transition"
+          :class="
+            route.name === item.name
+              ? 'text-[#c9a24b] border-[#c9a24b]'
+              : item.enabled
+                ? 'text-white/50 border-transparent hover:text-white/80'
+                : 'text-white/20 border-transparent cursor-not-allowed'
+          "
+          @click="goTo(item)"
+        >
+          <span v-html="item.icon"></span>
+          <span class="text-[11px] font-medium whitespace-nowrap">{{ item.label }}</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- ===== Desktop sidebar (md+) ===== -->
+    <aside class="hidden md:flex w-60 shrink-0 border-r border-white/10 flex-col justify-between">
       <div>
         <div class="flex items-center gap-3 px-5 py-5 border-b border-white/10">
           <div class="w-9 h-9 rounded-md bg-black border border-white/10 overflow-hidden flex items-center justify-center">
@@ -77,7 +122,7 @@ async function handleLogout() {
             <p class="text-white font-serif font-bold text-sm leading-tight">Creiizii</p>
             <p class="flex items-center gap-1 text-[11px] text-white/40">
               <span class="w-1.5 h-1.5 rounded-full bg-[#c9a24b]"></span>
-              {{ authStore.user?.email?.startsWith('admin') ? 'Administrador' : 'Staff' }}
+              {{ authStore.isAdmin ? 'Administrador' : 'Staff' }}
             </p>
           </div>
         </div>
@@ -133,7 +178,7 @@ async function handleLogout() {
     </aside>
 
     <!-- Content -->
-    <main class="flex-1 min-w-0 p-6">
+    <main class="flex-1 min-w-0 p-4 md:p-6">
       <router-view />
     </main>
   </div>

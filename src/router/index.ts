@@ -1,4 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { watch } from 'vue'
+import { useAuthStore } from '../stores/auth'
 
 const routes = [
   {
@@ -25,6 +27,7 @@ const routes = [
     component: () => import('../Admin/Dashboard.vue'),
     meta: {
       layout: 'admin',
+      requiresAuth: true,
     },
     children: [
       {
@@ -67,6 +70,40 @@ const router = createRouter({
 
     return { top: 0 }
   },
+})
+
+// Waits for Firebase's first onAuthStateChanged callback before deciding
+// anything. Without this, a hard refresh on /dashboard would see
+// authStore.user as null (Firebase hasn't responded yet) and bounce you to
+// /login even though you're actually logged in.
+function waitForAuthReady(authStore: ReturnType<typeof useAuthStore>): Promise<void> {
+  if (authStore.isReady) return Promise.resolve()
+  return new Promise((resolve) => {
+    const stop = watch(
+      () => authStore.isReady,
+      (ready) => {
+        if (ready) {
+          stop()
+          resolve()
+        }
+      },
+    )
+  })
+}
+
+router.beforeEach(async (to) => {
+  const authStore = useAuthStore()
+  await waitForAuthReady(authStore)
+
+  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
+
+  if (requiresAuth && !authStore.user) {
+    return { name: 'Login', query: { redirect: to.fullPath } }
+  }
+
+  if (to.name === 'Login' && authStore.user) {
+    return { name: 'Agenda' }
+  }
 })
 
 export default router

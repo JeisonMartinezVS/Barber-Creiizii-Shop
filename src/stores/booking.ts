@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
+import { addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore'
+import { db } from '../config/firebase'
 
 export interface Barbero {
   id: string
@@ -40,7 +42,7 @@ export function formatCOP(value: number): string {
 // panel. Note: these prices don't 100% match what's on /productos yet since
 // that page and this step came from separate mockups — reconcile once both
 // read from the same collection.
-const BARBEROS: Barbero[] = [
+export const BARBEROS: Barbero[] = [
   { id: 'admin', name: 'Administrador', role: 'Propietario' },
   { id: 'yeison', name: 'Yeison Creiizii', role: 'Barbero' },
   { id: 'camilo', name: 'Camilo Estilo', role: 'Barbero' },
@@ -84,9 +86,18 @@ const PRODUCTS: Product[] = [
   { id: 'gel-mate', name: 'Gel Acabado Mate', brand: 'Wella', price: 28000 },
 ]
 
+function combineDateAndTime(date: Date, time: string): Date {
+  const [hours = 0, minutes = 0] = time.split(':').map(Number)
+  const combined = new Date(date)
+  combined.setHours(hours, minutes, 0, 0)
+  return combined
+}
+
 export const useBookingStore = defineStore('booking', () => {
   const isOpen = ref(false)
   const isConfirmed = ref(false)
+  const isSubmitting = ref(false)
+  const submitError = ref<string | null>(null)
   const currentStepIndex = ref(0)
 
   const barberos = ref<Barbero[]>(BARBEROS)
@@ -106,9 +117,7 @@ export const useBookingStore = defineStore('booking', () => {
     notes: '',
   })
 
-  const currentStep = computed<StepName>(
-    () => STEPS[currentStepIndex.value] ?? STEPS[0],
-  )
+  const currentStep = computed<StepName>(() => STEPS[currentStepIndex.value] ?? STEPS[0])
 
   const selectedBarbero = computed(
     () => barberos.value.find((b) => b.id === selectedBarberoId.value) ?? null,
@@ -144,6 +153,7 @@ export const useBookingStore = defineStore('booking', () => {
   function reset() {
     currentStepIndex.value = 0
     isConfirmed.value = false
+    submitError.value = null
     selectedBarberoId.value = null
     selectedServiceId.value = null
     selectedDate.value = null
@@ -186,16 +196,53 @@ export const useBookingStore = defineStore('booking', () => {
     selectedProductIds.value = set
   }
 
-  function confirmBooking() {
-    // TODO: write this to Firestore as a new "citas" doc — that's what will
-    // make it show up in the admin panel's Agenda instead of just flipping
-    // this local flag.
-    isConfirmed.value = true
+  async function confirmBooking() {
+    if (!selectedBarbero.value || !selectedService.value || !selectedDate.value || !selectedTime.value) {
+      submitError.value = 'Falta información para completar la reserva.'
+      return
+    }
+
+    isSubmitting.value = true
+    submitError.value = null
+    try {
+      const dateTime = combineDateAndTime(selectedDate.value, selectedTime.value)
+
+      await addDoc(collection(db, 'citas'), {
+        barberoId: selectedBarbero.value.id,
+        barberoName: selectedBarbero.value.name,
+        serviceId: selectedService.value.id,
+        serviceName: selectedService.value.name,
+        serviceDuration: selectedService.value.duration,
+        servicePrice: selectedService.value.price,
+        products: selectedProducts.value.map((p) => ({ id: p.id, name: p.name, price: p.price })),
+        total: total.value,
+        dateTime: Timestamp.fromDate(dateTime),
+        date: dateTime.toISOString().slice(0, 10), // "YYYY-MM-DD", handy for simple date filtering
+        time: selectedTime.value,
+        customerName: customer.name.trim(),
+        customerPhone: customer.phone.trim(),
+        customerEmail: customer.email.trim(),
+        customerNotes: customer.notes.trim(),
+        // Every booking made from the public site starts as "pendiente" —
+        // only staff in the admin panel can move it to confirmada/etc.
+        status: 'pendiente',
+        createdAt: serverTimestamp(),
+      })
+
+      isConfirmed.value = true
+    } catch (err) {
+      console.error('No se pudo guardar la cita', err)
+      submitError.value = 'No se pudo guardar tu cita. Intenta de nuevo o escríbenos por WhatsApp.'
+    } finally {
+      isSubmitting.value = false
+    }
   }
 
   return {
     isOpen,
     isConfirmed,
+    isSubmitting,
+    submitError,
     currentStepIndex,
     currentStep,
     barberos,

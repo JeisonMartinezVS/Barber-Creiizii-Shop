@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import {
   signInWithEmailAndPassword,
   signOut,
@@ -20,12 +20,23 @@ function resolveEmail(usernameOrEmail: string): string {
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
+  const role = ref<string | null>(null)
   const isReady = ref(false) // becomes true once Firebase reports the initial auth state
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
-  onAuthStateChanged(auth, (firebaseUser) => {
+  const isAdmin = computed(() => role.value === 'admin')
+
+  onAuthStateChanged(auth, async (firebaseUser) => {
     user.value = firebaseUser
+    if (firebaseUser) {
+      // Custom claims (like `role`) travel on the ID token, not on the User
+      // object itself, so they need this extra round trip.
+      const tokenResult = await firebaseUser.getIdTokenResult()
+      role.value = (tokenResult.claims.role as string) ?? null
+    } else {
+      role.value = null
+    }
     isReady.value = true
   })
 
@@ -36,8 +47,10 @@ export const useAuthStore = defineStore('auth', () => {
       const email = resolveEmail(usernameOrEmail)
       const credential = await signInWithEmailAndPassword(auth, email, password)
       user.value = credential.user
+      const tokenResult = await credential.user.getIdTokenResult()
+      role.value = (tokenResult.claims.role as string) ?? null
       return true
-    } catch (err) {
+    } catch {
       // Deliberately vague: never reveal whether the user or the password was wrong.
       error.value = 'Usuario o contraseña incorrectos'
       return false
@@ -49,7 +62,8 @@ export const useAuthStore = defineStore('auth', () => {
   async function logout(): Promise<void> {
     await signOut(auth)
     user.value = null
+    role.value = null
   }
 
-  return { user, isReady, isLoading, error, login, logout }
+  return { user, role, isAdmin, isReady, isLoading, error, login, logout }
 })
