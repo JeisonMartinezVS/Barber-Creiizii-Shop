@@ -214,6 +214,13 @@ async function handleCancelStored() {
 
           <!-- Body -->
           <div class="px-6 py-5 overflow-y-auto grow">
+            <p
+              v-if="store.submitError && !isSpecialScreen"
+              class="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 mb-4"
+            >
+              {{ store.submitError }}
+            </p>
+
             <!-- Ya tienes una cita agendada (localStorage + verificación en Firestore) -->
             <div v-if="store.showStoredBooking && store.storedBooking" class="py-6">
               <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
@@ -608,7 +615,6 @@ async function handleCancelStored() {
                   <span class="text-lg font-bold text-primary">{{ formatCOP(store.total) }}</span>
                 </div>
               </div>
-              <p v-if="store.submitError" class="text-xs text-red-400 mt-3">{{ store.submitError }}</p>
             </template>
           </div>
 

@@ -1,7 +1,18 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
-import { addDoc, collection, doc, getDoc, serverTimestamp, Timestamp, updateDoc } from 'firebase/firestore'
-import { getFunctions, httpsCallable } from 'firebase/functions'
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  Timestamp,
+  updateDoc,
+  where,
+} from 'firebase/firestore'
 import { db } from '../config/firebase'
 
 export interface Barbero {
@@ -50,15 +61,22 @@ export function formatCOP(value: number): string {
   return `$${value.toLocaleString('es-CO')}`
 }
 
+// One doc per barbero+día+hora, deterministic ID on purpose (see confirmBooking):
+// Firestore only runs "create" rules when the doc doesn't exist yet, so this
+// doubles as our double-booking guard — a second person hitting the same
+// slot lands on the "update" rule instead, which a non-staff request can't
+// use to re-claim it.
+export function getSlotId(barberoId: string, date: string, time: string): string {
+  return `${barberoId}_${date}_${time}`
+}
+
 // TODO: replace all three lists below with real data fetched from Firestore
 // (empleados / servicios / productos collections) — same shape, same admin
 // panel. Note: these prices don't 100% match what's on /productos yet since
 // that page and this step came from separate mockups — reconcile once both
 // read from the same collection.
 export const BARBEROS: Barbero[] = [
-  { id: 'admin', name: 'Administrador', role: 'Propietario' },
-  { id: 'yeison', name: 'Yeison Creiizii', role: 'Barbero' },
-  { id: 'camilo', name: 'Camilo Estilo', role: 'Barbero' },
+  { id: 'admin', name: 'Administrador', role: 'Propietario' }
 ]
 
 const SERVICE_CATEGORIES: ServiceCategory[] = [
@@ -157,44 +175,18 @@ export const useBookingStore = defineStore('booking', () => {
     notes: '',
   })
 
-  // The cita just created in this session (drives the success screen's
-  // Cancelar/Google-Calendar buttons).
   const lastCreatedCitaId = ref<string | null>(null)
 
-  // A booking remembered from a previous visit (localStorage), shown instead
-  // of the wizard when the modal opens.
   const storedBooking = ref<StoredBooking | null>(null)
   const showStoredBooking = ref(false)
   const isCancelling = ref(false)
   let hasCheckedStorage = false
 
-  // Times already taken for the selected barbero + selected date — filled by
-  // fetchBookedTimes(), which calls the getBookedTimes Cloud Function (the
-  // public site has no direct read access to query the citas collection).
+  // Times already taken for the selected barbero + selected date, read
+  // straight from the public "disponibilidad" collection (no PII in it, so
+  // no auth needed — unlike "citas", which does hold customer data).
   const bookedTimes = ref<string[]>([])
   const isLoadingBookedTimes = ref(false)
-  const functions = getFunctions()
-
-  async function fetchBookedTimes() {
-    if (!selectedBarberoId.value || !selectedDate.value) {
-      bookedTimes.value = []
-      return
-    }
-    isLoadingBookedTimes.value = true
-    try {
-      const getBookedTimesFn = httpsCallable(functions, 'getBookedTimes')
-      const result = await getBookedTimesFn({
-        barberoId: selectedBarberoId.value,
-        date: formatLocalDate(selectedDate.value),
-      })
-      bookedTimes.value = ((result.data as { times: string[] })?.times) ?? []
-    } catch (err) {
-      console.error('No se pudieron cargar los horarios ocupados', err)
-      bookedTimes.value = []
-    } finally {
-      isLoadingBookedTimes.value = false
-    }
-  }
 
   const currentStep = computed<StepName>(() => STEPS[currentStepIndex.value] ?? STEPS[0])
 
@@ -222,11 +214,34 @@ export const useBookingStore = defineStore('booking', () => {
     () => customer.name.trim().length > 0 && customer.phone.trim().length > 0,
   )
 
+  async function fetchBookedTimes() {
+    if (!selectedBarberoId.value || !selectedDate.value) {
+      bookedTimes.value = []
+      return
+    }
+    isLoadingBookedTimes.value = true
+    try {
+      const dateStr = formatLocalDate(selectedDate.value)
+      const q = query(
+        collection(db, 'disponibilidad'),
+        where('barberoId', '==', selectedBarberoId.value),
+        where('date', '==', dateStr),
+      )
+      const snapshot = await getDocs(q)
+      bookedTimes.value = snapshot.docs
+        .map((d) => d.data())
+        .filter((slot) => slot.status !== 'cancelada')
+        .map((slot) => slot.time as string)
+    } catch (err) {
+      console.error('No se pudieron cargar los horarios ocupados', err)
+      bookedTimes.value = []
+    } finally {
+      isLoadingBookedTimes.value = false
+    }
+  }
+
   // --- Remembering a booking across visits ---------------------------------
 
-  // Re-checks localStorage + Firestore. Safe to call more than once (e.g.
-  // once on page load for a banner, again when the modal opens) — cheap and
-  // idempotent.
   async function refreshStoredBooking() {
     const stored = readStoredBooking()
     if (!stored || new Date(stored.dateTimeISO).getTime() <= Date.now()) {
@@ -244,8 +259,6 @@ export const useBookingStore = defineStore('booking', () => {
         clearStoredBooking()
       }
     } catch {
-      // Offline or blocked — fall back to trusting the local copy rather
-      // than hiding a real upcoming appointment.
       storedBooking.value = stored
     }
     hasCheckedStorage = true
@@ -269,12 +282,14 @@ export const useBookingStore = defineStore('booking', () => {
 
   function startNewBooking() {
     showStoredBooking.value = false
+    submitError.value = null
     currentStepIndex.value = 0
     selectedBarberoId.value = null
     selectedServiceId.value = null
     selectedDate.value = null
     selectedTime.value = null
     selectedProductIds.value = new Set()
+    bookedTimes.value = []
     customer.name = ''
     customer.phone = ''
     customer.email = ''
@@ -323,30 +338,55 @@ export const useBookingStore = defineStore('booking', () => {
 
     isSubmitting.value = true
     submitError.value = null
-    try {
-      const dateTime = combineDateAndTime(selectedDate.value, selectedTime.value)
 
-      const docRef = await addDoc(collection(db, 'citas'), {
-        barberoId: selectedBarbero.value.id,
-        barberoName: selectedBarbero.value.name,
-        serviceId: selectedService.value.id,
-        serviceName: selectedService.value.name,
-        serviceDuration: selectedService.value.duration,
-        servicePrice: selectedService.value.price,
-        products: selectedProducts.value.map((p) => ({ id: p.id, name: p.name, price: p.price })),
-        total: total.value,
-        dateTime: Timestamp.fromDate(dateTime),
-        date: formatLocalDate(dateTime), // "YYYY-MM-DD", local calendar date — handy for filtering
-        time: selectedTime.value,
-        customerName: customer.name.trim(),
-        customerPhone: customer.phone.trim(),
-        customerEmail: customer.email.trim(),
-        customerNotes: customer.notes.trim(),
-        // Every booking made from the public site starts as "pendiente" —
-        // only staff in the admin panel can move it to confirmada/etc.
-        status: 'pendiente',
-        createdAt: serverTimestamp(),
-      })
+    const dateTime = combineDateAndTime(selectedDate.value, selectedTime.value)
+    const dateStr = formatLocalDate(dateTime)
+    const slotId = getSlotId(selectedBarbero.value.id, dateStr, selectedTime.value)
+
+    try {
+      // Claim the slot FIRST. If someone else already took it, this write is
+      // rejected by the security rules (see getSlotId's comment above) — so
+      // this doubles as protection against two people booking the same hour.
+      try {
+        await setDoc(doc(db, 'disponibilidad', slotId), {
+          barberoId: selectedBarbero.value.id,
+          date: dateStr,
+          time: selectedTime.value,
+          status: 'pendiente',
+        })
+      } catch {
+        submitError.value = 'Ese horario ya no está disponible. Por favor elige otro.'
+        await fetchBookedTimes()
+        goToStep(STEPS.indexOf('Fecha'))
+        return
+      }
+
+      let docRef
+      try {
+        docRef = await addDoc(collection(db, 'citas'), {
+          barberoId: selectedBarbero.value.id,
+          barberoName: selectedBarbero.value.name,
+          serviceId: selectedService.value.id,
+          serviceName: selectedService.value.name,
+          serviceDuration: selectedService.value.duration,
+          servicePrice: selectedService.value.price,
+          products: selectedProducts.value.map((p) => ({ id: p.id, name: p.name, price: p.price })),
+          total: total.value,
+          dateTime: Timestamp.fromDate(dateTime),
+          date: dateStr,
+          time: selectedTime.value,
+          customerName: customer.name.trim(),
+          customerPhone: customer.phone.trim(),
+          customerEmail: customer.email.trim(),
+          customerNotes: customer.notes.trim(),
+          status: 'pendiente',
+          createdAt: serverTimestamp(),
+        })
+      } catch (citaErr) {
+        // Roll back the slot claim since the actual booking failed.
+        await setDoc(doc(db, 'disponibilidad', slotId), { status: 'cancelada' }, { merge: true }).catch(() => {})
+        throw citaErr
+      }
 
       lastCreatedCitaId.value = docRef.id
       isConfirmed.value = true
@@ -373,11 +413,21 @@ export const useBookingStore = defineStore('booking', () => {
   }
 
   // Used by both the "just booked" success screen and the "you already have
-  // a booking" screen — same underlying action either way.
+  // a booking" screen — reads the cita to find its slot, then frees both.
   async function cancelBooking(citaId: string): Promise<boolean> {
     isCancelling.value = true
     try {
+      const citaSnap = await getDoc(doc(db, 'citas', citaId))
+      if (!citaSnap.exists()) return false
+      const cita = citaSnap.data() as { barberoId: string; date: string; time: string }
+
       await updateDoc(doc(db, 'citas', citaId), { status: 'cancelada' })
+      await setDoc(
+        doc(db, 'disponibilidad', getSlotId(cita.barberoId, cita.date, cita.time)),
+        { status: 'cancelada' },
+        { merge: true },
+      )
+
       if (storedBooking.value?.citaId === citaId) {
         storedBooking.value = null
         clearStoredBooking()

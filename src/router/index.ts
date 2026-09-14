@@ -42,7 +42,7 @@ const routes = [
       { path: 'reportes', name: 'reportes', component: () => import('../Admin/ReportView.vue') },
       { path: 'clientes', name: 'clientes', component: () => import('../Admin/ClientsView.vue') },
       { path: 'empleados', name: 'empleados', component: () => import('../Admin/EmpleadosView.vue') },
-      // { path: 'productos', name: 'productos', component: () => import('@/views/productos/ProductosView.vue') },
+      { path: 'productos', name: 'productos', component: () => import('../Admin/ProductsView.vue') },
       { path: 'horarios', name: 'horarios', component: () => import('../Admin/TimeView.vue') },
     ],
   },

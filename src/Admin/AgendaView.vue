@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore'
+import { collection, deleteDoc, doc, onSnapshot, orderBy, query, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from '../config/firebase'
-import { BARBEROS, formatLocalDate } from '../stores/booking'
+import { BARBEROS, formatLocalDate, getSlotId } from '../stores/booking'
 import StatCard from '../components/dashboard/StatCard.vue'
 
 type CitaStatus = 'pendiente' | 'confirmada' | 'completada' | 'cancelada' | 'no_asistio'
@@ -166,9 +166,21 @@ document.addEventListener('click', (e) => {
   if (!(e.target as HTMLElement).closest('[data-acciones-menu]')) closeMenu()
 })
 
+async function releaseSlot(cita: Cita) {
+  await setDoc(
+    doc(db, 'disponibilidad', getSlotId(cita.barberoId, cita.date, cita.time)),
+    { status: 'cancelada' },
+    { merge: true },
+  ).catch(() => {
+    // If the slot doc never existed (e.g. a cita created before this
+    // feature), there's nothing to release — safe to ignore.
+  })
+}
+
 async function setStatus(cita: Cita, status: CitaStatus) {
   closeMenu()
   await updateDoc(doc(db, 'citas', cita.id), { status })
+  if (status === 'cancelada') await releaseSlot(cita)
 }
 
 const citaToDelete = ref<Cita | null>(null)
@@ -187,6 +199,7 @@ async function confirmDelete() {
   isDeleting.value = true
   try {
     await deleteDoc(doc(db, 'citas', citaToDelete.value.id))
+    await releaseSlot(citaToDelete.value)
     citaToDelete.value = null
   } finally {
     isDeleting.value = false

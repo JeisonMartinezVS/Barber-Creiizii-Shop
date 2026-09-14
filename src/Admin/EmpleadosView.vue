@@ -93,8 +93,8 @@ async function submitNewEmployee() {
     // No need to manually add it to `empleados` — the onSnapshot listener
     // above picks up the new Firestore doc automatically.
     isModalOpen.value = false
-  } catch (err: any) {
-    formError.value = err?.message ?? 'No se pudo crear el empleado.'
+  } catch (err: unknown) {
+    formError.value = err instanceof Error ? err.message : 'No se pudo crear el empleado.'
   } finally {
     isSubmitting.value = false
   }
