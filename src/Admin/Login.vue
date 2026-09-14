@@ -55,10 +55,10 @@ async function handleSubmit() {
           <!-- Logo -->
           <div class="flex justify-center mb-6">
             <div
-              class="w-20 h-20 rounded-md bg-black border border-white/10 flex items-center justify-center overflow-hidden"
+              class="w-32 h-32 rounded-md flex items-center justify-center overflow-hidden"
             >
               <img
-                src="../../public/logo.jpg"
+                src="../../public/logo.png"
                 alt="Barber Creiizii Shop"
                 class="w-full h-full object-cover"
               />

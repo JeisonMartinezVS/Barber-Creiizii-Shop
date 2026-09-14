@@ -202,7 +202,7 @@ async function handleCancelStored() {
                   v-html="index < store.currentStepIndex ? checkIcon : stepIcons[step]"
                 ></span>
                 <span
-                  class="text-xs whitespace-nowrap"
+                  class="text-xs whitespace-nowrap hidden md:flex"
                   :class="index === store.currentStepIndex ? 'text-primary' : index < store.currentStepIndex ? 'text-white/60' : 'text-white/30'"
                 >
                   {{ step }}
