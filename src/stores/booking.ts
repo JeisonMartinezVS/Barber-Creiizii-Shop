@@ -6,6 +6,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -71,13 +73,6 @@ export const BARBEROS: Barbero[] = [
 
 const SERVICE_CATEGORIES: ServiceCategory[] = []
 
-const PRODUCTS: Product[] = [
-  { id: 'gel-fuerte', name: 'Gel Fijación Fuerte', brand: 'American Crew', price: 25000 },
-  { id: 'gel-media', name: 'Gel Fijación Media', brand: 'Gatsby', price: 18000 },
-  { id: 'gel-wetlook', name: 'Gel Wet Look', brand: "L'Oreal", price: 22000 },
-  { id: 'gel-mate', name: 'Gel Acabado Mate', brand: 'Wella', price: 28000 },
-]
-
 const STORAGE_KEY = 'creiizii_last_booking'
 const INACTIVE_STATUSES = ['cancelada', 'completada', 'no_asistio']
 
@@ -119,7 +114,21 @@ export const useBookingStore = defineStore('booking', () => {
 
   const barberos = ref<Barbero[]>(BARBEROS)
   const serviceCategories = ref<ServiceCategory[]>(SERVICE_CATEGORIES)
-  const products = ref<Product[]>(PRODUCTS)
+  const products = ref<Product[]>([])
+  // Started once, right away — small collection, cheap to keep live for the
+  // whole session rather than re-fetching every time the modal opens.
+  onSnapshot(
+    query(collection(db, 'productos'), where('active', '==', true), orderBy('name')),
+    (snapshot) => {
+      products.value = snapshot.docs.map((d) => {
+        const data = d.data()
+        return { id: d.id, name: data.name, brand: data.brand ?? '', price: data.price ?? 0 } as Product
+      })
+    },
+    (err) => {
+      console.error('No se pudieron cargar los productos', err)
+    },
+  )
 
   const selectedBarberoId = ref<string | null>(null)
   const selectedServiceId = ref<string | null>(null)

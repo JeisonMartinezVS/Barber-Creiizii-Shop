@@ -1,54 +1,50 @@
 <script setup lang="ts">
+import { onMounted, onUnmounted, ref } from 'vue'
+import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore'
+import { db } from '../config/firebase'
 
 interface DisplayProduct {
   id: string
   name: string
+  brand: string
   description: string
-  price: string
+  price: number
   image: string
-  bg: string
 }
 
-// TODO: replace with real productos fetched from Firestore — note this list's
-// names/prices don't fully match the ones used in the reservation modal yet
-// (those came from a separate mockup); point both at the same collection
-// once it exists.
-const products: DisplayProduct[] = [
-  {
-    id: 'fuerte',
-    name: 'Gel Fijación Fuerte',
-    description: 'Gel de alta fijación para estilos que duran todo el día. Acabado brillante y control máximo.',
-    price: '$25.000 COP',
-    image: '',
-    bg: 'bg-black',
-  },
-  {
-    id: 'media',
-    name: 'Gel Fijación Media',
-    description: 'Gel versátil con fijación media. Perfecto para looks naturales con control moderado.',
-    price: '$22.000 COP',
-    image: '',
-    bg: 'bg-white',
-  },
-  {
-    id: 'mojado',
-    name: 'Gel Efecto Mojado',
-    description: 'Gel con acabado húmedo para un look clásico y elegante. Fijación duradera.',
-    price: '$24.000 COP',
-    image: '',
-    bg: 'bg-sky-100',
-  },
-  {
-    id: 'mate',
-    name: 'Gel Mate',
-    description: 'Gel con acabado mate para un estilo natural sin brillo. Fijación flexible.',
-    price: '$26.000 COP',
-    image: '',
-    bg: 'bg-slate-800',
-  },
-]
+const products = ref<DisplayProduct[]>([])
+const isLoading = ref(true)
+let unsubscribe: (() => void) | null = null
 
-const whatsappUrl = 'https://wa.me/573006282601?text=' + encodeURIComponent('Hola, quiero consultar disponibilidad de productos')
+onMounted(() => {
+  // Solo productos activos — lo que el admin apague con el toggle
+  // desaparece de aquí automáticamente.
+  const q = query(collection(db, 'productos'), where('active', '==', true), orderBy('name'))
+  unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      products.value = snapshot.docs.map((d) => {
+        const data = d.data()
+        return {
+          id: d.id,
+          name: data.name,
+          brand: data.brand ?? '',
+          description: data.description ?? '',
+          price: data.price ?? 0,
+          image: data.image ?? '',
+        }
+      })
+      isLoading.value = false
+    },
+    () => {
+      isLoading.value = false
+    },
+  )
+})
+onUnmounted(() => unsubscribe?.())
+
+const whatsappUrl =
+  'https://wa.me/573006282601?text=' + encodeURIComponent('Hola, quiero consultar disponibilidad de productos')
 </script>
 
 <template>
@@ -64,15 +60,20 @@ const whatsappUrl = 'https://wa.me/573006282601?text=' + encodeURIComponent('Hol
         <span class="w-10 h-px bg-primary/40"></span>
       </div>
 
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-5 text-left">
+      <p v-if="isLoading" class="text-white/30 text-sm py-10">Cargando productos...</p>
+      <p v-else-if="products.length === 0" class="text-white/30 text-sm py-10">
+        Muy pronto vas a encontrar aquí nuestros productos.
+      </p>
+
+      <div v-else class="grid grid-cols-2 md:grid-cols-4 gap-5 text-left">
         <div
           v-for="product in products"
           :key="product.id"
           class="bg-[#0e0e0e] border border-white/10 rounded-xl overflow-hidden flex flex-col"
         >
-          <div :class="['aspect-square flex items-center justify-center', product.bg]">
+          <div class="aspect-square flex items-center justify-center bg-white/5">
             <img v-if="product.image" :src="product.image" :alt="product.name" class="w-full h-full object-cover" />
-            <svg v-else width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-black/20">
+            <svg v-else width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-white/15">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
               <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
               <line x1="12" y1="22.08" x2="12" y2="12" />
@@ -80,9 +81,10 @@ const whatsappUrl = 'https://wa.me/573006282601?text=' + encodeURIComponent('Hol
           </div>
           <div class="p-4 flex flex-col grow">
             <p class="text-sm font-bold text-white mb-1">{{ product.name }}</p>
-            <p class="text-xs text-white/40 mb-3 grow">{{ product.description }}</p>
+            <p v-if="product.description" class="text-xs text-white/40 mb-3 grow">{{ product.description }}</p>
+            <p v-else class="grow"></p>
             <p class="text-sm">
-              <span class="font-bold text-primary">{{ product.price.split(' ')[0] }}</span>
+              <span class="font-bold text-primary">${{ product.price.toLocaleString('es-CO') }}</span>
               <span class="text-white/30 ml-1">COP</span>
             </p>
           </div>

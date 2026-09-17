@@ -71,12 +71,16 @@ function closeForm() {
 
 async function saveProduct() {
   formError.value = ''
-  if (!form.name.trim() || !form.price.trim()) {
+  const name = String(form.name).trim()
+  const priceRaw = String(form.price).trim()
+
+  if (!name || !priceRaw) {
     formError.value = 'Nombre y precio son obligatorios.'
     return
   }
-  const price = Number(form.price)
-  const stock = form.stock.trim() ? Number(form.stock) : 0
+  const price = Number(priceRaw)
+  const stockRaw = String(form.stock).trim()
+  const stock = stockRaw ? Number(stockRaw) : 0
   if (Number.isNaN(price) || Number.isNaN(stock)) {
     formError.value = 'Precio y stock deben ser números.'
     return
@@ -85,11 +89,11 @@ async function saveProduct() {
   isSaving.value = true
   try {
     const data = {
-      name: form.name.trim(),
-      brand: form.brand.trim(),
+      name,
+      brand: String(form.brand).trim(),
       price,
       stock,
-      description: form.description.trim(),
+      description: String(form.description).trim(),
     }
     if (editingId.value) {
       await updateDoc(doc(db, 'productos', editingId.value), data)
