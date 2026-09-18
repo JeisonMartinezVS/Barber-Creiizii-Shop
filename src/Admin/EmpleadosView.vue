@@ -107,7 +107,7 @@ async function submitNewEmployee() {
       name: form.name.trim(),
       email,
       phone: form.phone.trim(),
-      username: email.split('@')[0],
+      username: email.split('@')[0]!,
       role: 'empleado',
       active: true,
       createdAt: new Date().toISOString(),
@@ -115,7 +115,7 @@ async function submitNewEmployee() {
 
     createdEmployee.value = {
       name: form.name.trim(),
-      username: email.split('@')[0],
+      username: email.split('@')[0]!,
       phone: form.phone.trim(),
       password,
     }

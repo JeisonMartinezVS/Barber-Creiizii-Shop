@@ -116,7 +116,7 @@ const groupedCitas = computed<CitaGroup[]>(() => {
     groups.set(cita.date, list)
   }
   return Array.from(groups.entries()).map(([dateKey, list]) => {
-    const d = list[0].dateTime.toDate()
+    const d = list[0]!.dateTime.toDate()
     return {
       dateKey,
       label: `${WEEKDAY_ABBR[d.getDay()]}, ${d.getDate()} de ${MONTH_ABBR[d.getMonth()]}`,
