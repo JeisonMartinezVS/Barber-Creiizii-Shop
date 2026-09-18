@@ -6,14 +6,15 @@ import {
   onAuthStateChanged,
   type User,
 } from 'firebase/auth'
-import { auth } from '../config/firebase'
+import { doc, getDoc } from 'firebase/firestore'
+import { auth, db } from '../config/firebase'
 
 // The login screen shows a "usuario" field, but Firebase Auth needs an email.
 // If the person doesn't type "@", we build one using this fixed domain, so no
 // real email address is required for staff accounts.
 const ADMIN_EMAIL_DOMAIN = import.meta.env.VITE_ADMIN_EMAIL_DOMAIN ?? 'creiizii-admin.internal'
 
-function resolveEmail(usernameOrEmail: string): string {
+export function resolveEmail(usernameOrEmail: string): string {
   const value = usernameOrEmail.trim().toLowerCase()
   return value.includes('@') ? value : `${value}@${ADMIN_EMAIL_DOMAIN}`
 }
@@ -26,14 +27,26 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref<string | null>(null)
 
   const isAdmin = computed(() => role.value === 'admin')
+  const isEmpleado = computed(() => role.value === 'empleado')
+
+  // Role lives in Firestore (empleados/{uid}.role), not in a custom claim —
+  // custom claims can only be set by the Admin SDK (a Cloud Function), which
+  // is exactly the setup that kept failing. A plain Firestore read works
+  // from the browser with no backend at all.
+  async function loadRole(uid: string) {
+    try {
+      const snap = await getDoc(doc(db, 'empleados', uid))
+      role.value = snap.exists() ? ((snap.data().role as string) ?? null) : null
+    } catch (err) {
+      console.error('No se pudo cargar el rol del usuario', err)
+      role.value = null
+    }
+  }
 
   onAuthStateChanged(auth, async (firebaseUser) => {
     user.value = firebaseUser
     if (firebaseUser) {
-      // Custom claims (like `role`) travel on the ID token, not on the User
-      // object itself, so they need this extra round trip.
-      const tokenResult = await firebaseUser.getIdTokenResult()
-      role.value = (tokenResult.claims.role as string) ?? null
+      await loadRole(firebaseUser.uid)
     } else {
       role.value = null
     }
@@ -47,8 +60,7 @@ export const useAuthStore = defineStore('auth', () => {
       const email = resolveEmail(usernameOrEmail)
       const credential = await signInWithEmailAndPassword(auth, email, password)
       user.value = credential.user
-      const tokenResult = await credential.user.getIdTokenResult()
-      role.value = (tokenResult.claims.role as string) ?? null
+      await loadRole(credential.user.uid)
       return true
     } catch {
       // Deliberately vague: never reveal whether the user or the password was wrong.
@@ -65,5 +77,5 @@ export const useAuthStore = defineStore('auth', () => {
     role.value = null
   }
 
-  return { user, role, isAdmin, isReady, isLoading, error, login, logout }
+  return { user, role, isAdmin, isEmpleado, isReady, isLoading, error, login, logout }
 })

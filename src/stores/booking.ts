@@ -67,12 +67,6 @@ export function getSlotId(barberoId: string, date: string, time: string): string
   return `${barberoId}_${date}_${time}`
 }
 
-export const BARBEROS: Barbero[] = [
-  { id: 'admin', name: 'Administrador', role: 'Propietario' },
-]
-
-const SERVICE_CATEGORIES: ServiceCategory[] = []
-
 const STORAGE_KEY = 'creiizii_last_booking'
 const INACTIVE_STATUSES = ['cancelada', 'completada', 'no_asistio']
 
@@ -96,13 +90,43 @@ function readStoredBooking(): StoredBooking | null {
     return null
   }
 }
-
 function writeStoredBooking(booking: StoredBooking) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(booking))
 }
-
 function clearStoredBooking() {
   localStorage.removeItem(STORAGE_KEY)
+}
+
+// Shape stored on each empleados/{uid} doc's own `services` field — same
+// shape your CutsView.vue already writes to `config.services`, just now
+// scoped to one barbero instead of shared globally.
+interface RawServiceItem {
+  name?: string
+  price?: string | number
+  active?: boolean
+}
+interface RawService {
+  title?: string
+  items?: RawServiceItem[]
+}
+
+function parseServiceCategories(raw: RawService[] | undefined): ServiceCategory[] {
+  return (raw || [])
+    .map((service, serviceIndex) => ({
+      id: `service-${serviceIndex}`,
+      title: String(service.title || '').trim(),
+      items: (service.items || [])
+        .filter((item) => item.active !== false)
+        .filter((item) => String(item.name || '').trim() !== '')
+        .map((item, itemIndex) => ({
+          id: `service-${serviceIndex}-item-${itemIndex}`,
+          name: String(item.name || '').trim(),
+          description: '',
+          duration: '30 min',
+          price: Number(String(item.price ?? '0').replace(/\D/g, '')) || 0,
+        })),
+    }))
+    .filter((service) => service.title && service.items.length > 0)
 }
 
 export const useBookingStore = defineStore('booking', () => {
@@ -112,11 +136,40 @@ export const useBookingStore = defineStore('booking', () => {
   const submitError = ref<string | null>(null)
   const currentStepIndex = ref(0)
 
-  const barberos = ref<Barbero[]>(BARBEROS)
-  const serviceCategories = ref<ServiceCategory[]>(SERVICE_CATEGORIES)
+  // Barberos = staff activo (admin + empleados), en vivo desde Firestore —
+  // ya no es una lista quemada. Se arranca una sola vez, igual que products.
+  const barberos = ref<Barbero[]>([])
+
+onSnapshot(
+  collection(db, 'empleados'),
+  (snapshot) => {
+    console.log(
+      'EMPLEADOS FIREBASE:',
+      snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }))
+    )
+
+    barberos.value = snapshot.docs
+      .map((d) => {
+        const data = d.data()
+
+        return {
+          id: d.id,
+          name: data.name,
+          role: data.role === 'admin' ? 'Propietario' : 'Barbero',
+        } as Barbero
+      })
+      .sort((a, b) => a.name.localeCompare(b.name))
+  },
+  (err) => console.error('No se pudieron cargar los empleados', err),
+)
+
+  const serviceCategories = ref<ServiceCategory[]>([])
+  const isLoadingServices = ref(false)
+
   const products = ref<Product[]>([])
-  // Started once, right away — small collection, cheap to keep live for the
-  // whole session rather than re-fetching every time the modal opens.
   onSnapshot(
     query(collection(db, 'productos'), where('active', '==', true), orderBy('name')),
     (snapshot) => {
@@ -125,9 +178,7 @@ export const useBookingStore = defineStore('booking', () => {
         return { id: d.id, name: data.name, brand: data.brand ?? '', price: data.price ?? 0 } as Product
       })
     },
-    (err) => {
-      console.error('No se pudieron cargar los productos', err)
-    },
+    (err) => console.error('No se pudieron cargar los productos', err),
   )
 
   const selectedBarberoId = ref<string | null>(null)
@@ -153,18 +204,13 @@ export const useBookingStore = defineStore('booking', () => {
   const bookedTimes = ref<string[]>([])
   const isLoadingBookedTimes = ref(false)
 
-  const currentStep = computed<StepName>(
-    () => STEPS[currentStepIndex.value] ?? STEPS[0],
-  )
+  const currentStep = computed<StepName>(() => STEPS[currentStepIndex.value] ?? STEPS[0])
 
   const selectedBarbero = computed(
     () => barberos.value.find((b) => b.id === selectedBarberoId.value) ?? null,
   )
 
-  const allServices = computed(() =>
-    serviceCategories.value.flatMap((category) => category.items),
-  )
-
+  const allServices = computed(() => serviceCategories.value.flatMap((category) => category.items))
   const selectedService = computed(
     () => allServices.value.find((s) => s.id === selectedServiceId.value) ?? null,
   )
@@ -176,61 +222,28 @@ export const useBookingStore = defineStore('booking', () => {
   const total = computed(() => {
     const servicePrice = selectedService.value?.price ?? 0
     const productsPrice = selectedProducts.value.reduce((sum, p) => sum + p.price, 0)
-
     return servicePrice + productsPrice
   })
 
-  const isFechaValid = computed(
-    () => !!selectedDate.value && !!selectedTime.value,
-  )
-
+  const isFechaValid = computed(() => !!selectedDate.value && !!selectedTime.value)
   const isDatosValid = computed(
     () => customer.name.trim().length > 0 && customer.phone.trim().length > 0,
   )
 
-  async function fetchServices() {
+  // Cada barbero tiene SU PROPIA lista de servicios/precios, guardada en
+  // empleados/{barberoId}.services — se recarga cada vez que se elige un
+  // barbero distinto en el wizard.
+  async function fetchServicesForBarbero(barberoId: string) {
+    isLoadingServices.value = true
     try {
-      const snapshot = await getDocs(collection(db, 'config'))
-      const configDocument = snapshot.docs[0]
-
-      if (!configDocument) {
-        serviceCategories.value = []
-        return
-      }
-
-      const data = configDocument.data() as {
-        services?: Array<{
-          title?: string
-          items?: Array<{
-            name?: string
-            price?: string | number
-            active?: boolean
-          }>
-        }>
-      }
-
-      serviceCategories.value = (data.services || [])
-        .map((service, serviceIndex) => ({
-          id: `service-${serviceIndex}`,
-          title: String(service.title || '').trim(),
-          items: (service.items || [])
-            .filter((item) => item.active !== false)
-            .filter((item) => String(item.name || '').trim() !== '')
-            .map((item, itemIndex) => ({
-              id: `service-${serviceIndex}-item-${itemIndex}`,
-              name: String(item.name || '').trim(),
-              description: '',
-              duration: '30 min',
-              price:
-                Number(
-                  String(item.price || '0').replace(/\D/g, ''),
-                ) || 0,
-            })),
-        }))
-        .filter((service) => service.title && service.items.length > 0)
+      const snap = await getDoc(doc(db, 'empleados', barberoId))
+      const data = snap.exists() ? (snap.data() as { services?: RawService[] }) : undefined
+      serviceCategories.value = parseServiceCategories(data?.services)
     } catch (err) {
-      console.error('No se pudieron cargar los servicios', err)
+      console.error('No se pudieron cargar los servicios del barbero', err)
       serviceCategories.value = []
+    } finally {
+      isLoadingServices.value = false
     }
   }
 
@@ -239,20 +252,15 @@ export const useBookingStore = defineStore('booking', () => {
       bookedTimes.value = []
       return
     }
-
     isLoadingBookedTimes.value = true
-
     try {
       const dateStr = formatLocalDate(selectedDate.value)
-
       const q = query(
         collection(db, 'disponibilidad'),
         where('barberoId', '==', selectedBarberoId.value),
         where('date', '==', dateStr),
       )
-
       const snapshot = await getDocs(q)
-
       bookedTimes.value = snapshot.docs
         .map((d) => d.data())
         .filter((slot) => slot.status !== 'cancelada')
@@ -267,22 +275,16 @@ export const useBookingStore = defineStore('booking', () => {
 
   async function refreshStoredBooking() {
     const stored = readStoredBooking()
-
     if (!stored || new Date(stored.dateTimeISO).getTime() <= Date.now()) {
       storedBooking.value = null
       clearStoredBooking()
       hasCheckedStorage = true
       return
     }
-
     try {
       const snap = await getDoc(doc(db, 'citas', stored.citaId))
-
       if (snap.exists() && !INACTIVE_STATUSES.includes(snap.data().status)) {
-        storedBooking.value = {
-          ...stored,
-          status: snap.data().status,
-        }
+        storedBooking.value = { ...stored, status: snap.data().status }
       } else {
         storedBooking.value = null
         clearStoredBooking()
@@ -290,7 +292,6 @@ export const useBookingStore = defineStore('booking', () => {
     } catch {
       storedBooking.value = stored
     }
-
     hasCheckedStorage = true
   }
 
@@ -299,11 +300,7 @@ export const useBookingStore = defineStore('booking', () => {
     isConfirmed.value = false
     submitError.value = null
 
-    await fetchServices()
-
-    if (!hasCheckedStorage) {
-      await refreshStoredBooking()
-    }
+    if (!hasCheckedStorage) await refreshStoredBooking()
 
     if (storedBooking.value) {
       showStoredBooking.value = true
@@ -311,7 +308,6 @@ export const useBookingStore = defineStore('booking', () => {
       startNewBooking()
     }
   }
-
   function close() {
     isOpen.value = false
   }
@@ -325,6 +321,7 @@ export const useBookingStore = defineStore('booking', () => {
     selectedDate.value = null
     selectedTime.value = null
     selectedProductIds.value = new Set()
+    serviceCategories.value = []
     bookedTimes.value = []
     customer.name = ''
     customer.phone = ''
@@ -333,63 +330,43 @@ export const useBookingStore = defineStore('booking', () => {
   }
 
   function goToStep(index: number) {
-    if (index >= 0 && index < STEPS.length) {
-      currentStepIndex.value = index
-    }
+    if (index >= 0 && index < STEPS.length) currentStepIndex.value = index
   }
-
   function next() {
     goToStep(currentStepIndex.value + 1)
   }
-
   function back() {
     goToStep(currentStepIndex.value - 1)
   }
 
   function selectBarbero(id: string) {
     selectedBarberoId.value = id
-
-    if (selectedDate.value) {
-      fetchBookedTimes()
-    }
-
+    selectedServiceId.value = null // el precio depende del barbero — no arrastrar el servicio del anterior
+    fetchServicesForBarbero(id)
+    if (selectedDate.value) fetchBookedTimes()
     next()
   }
-
   function selectService(id: string) {
     selectedServiceId.value = id
     next()
   }
-
   function selectDate(date: Date) {
     selectedDate.value = date
     selectedTime.value = null
     fetchBookedTimes()
   }
-
   function selectTime(time: string) {
     selectedTime.value = time
   }
-
   function toggleProduct(id: string) {
     const set = new Set(selectedProductIds.value)
-
-    if (set.has(id)) {
-      set.delete(id)
-    } else {
-      set.add(id)
-    }
-
+    if (set.has(id)) set.delete(id)
+    else set.add(id)
     selectedProductIds.value = set
   }
 
   async function confirmBooking() {
-    if (
-      !selectedBarbero.value ||
-      !selectedService.value ||
-      !selectedDate.value ||
-      !selectedTime.value
-    ) {
+    if (!selectedBarbero.value || !selectedService.value || !selectedDate.value || !selectedTime.value) {
       submitError.value = 'Falta información para completar la reserva.'
       return
     }
@@ -397,18 +374,9 @@ export const useBookingStore = defineStore('booking', () => {
     isSubmitting.value = true
     submitError.value = null
 
-    const dateTime = combineDateAndTime(
-      selectedDate.value,
-      selectedTime.value,
-    )
-
+    const dateTime = combineDateAndTime(selectedDate.value, selectedTime.value)
     const dateStr = formatLocalDate(dateTime)
-
-    const slotId = getSlotId(
-      selectedBarbero.value.id,
-      dateStr,
-      selectedTime.value,
-    )
+    const slotId = getSlotId(selectedBarbero.value.id, dateStr, selectedTime.value)
 
     try {
       try {
@@ -419,16 +387,13 @@ export const useBookingStore = defineStore('booking', () => {
           status: 'pendiente',
         })
       } catch {
-        submitError.value =
-          'Ese horario ya no está disponible. Por favor elige otro.'
-
+        submitError.value = 'Ese horario ya no está disponible. Por favor elige otro.'
         await fetchBookedTimes()
         goToStep(STEPS.indexOf('Fecha'))
         return
       }
 
       let docRef
-
       try {
         docRef = await addDoc(collection(db, 'citas'), {
           barberoId: selectedBarbero.value.id,
@@ -437,11 +402,7 @@ export const useBookingStore = defineStore('booking', () => {
           serviceName: selectedService.value.name,
           serviceDuration: selectedService.value.duration,
           servicePrice: selectedService.value.price,
-          products: selectedProducts.value.map((p) => ({
-            id: p.id,
-            name: p.name,
-            price: p.price,
-          })),
+          products: selectedProducts.value.map((p) => ({ id: p.id, name: p.name, price: p.price })),
           total: total.value,
           dateTime: Timestamp.fromDate(dateTime),
           date: dateStr,
@@ -454,12 +415,7 @@ export const useBookingStore = defineStore('booking', () => {
           createdAt: serverTimestamp(),
         })
       } catch (citaErr) {
-        await setDoc(
-          doc(db, 'disponibilidad', slotId),
-          { status: 'cancelada' },
-          { merge: true },
-        ).catch(() => {})
-
+        await setDoc(doc(db, 'disponibilidad', slotId), { status: 'cancelada' }, { merge: true }).catch(() => {})
         throw citaErr
       }
 
@@ -477,13 +433,11 @@ export const useBookingStore = defineStore('booking', () => {
         total: total.value,
         status: 'pendiente',
       }
-
       writeStoredBooking(record)
       storedBooking.value = record
     } catch (err) {
       console.error('No se pudo guardar la cita', err)
-      submitError.value =
-        'No se pudo guardar tu cita. Intenta de nuevo o escríbenos por WhatsApp.'
+      submitError.value = 'No se pudo guardar tu cita. Intenta de nuevo o escríbenos por WhatsApp.'
     } finally {
       isSubmitting.value = false
     }
@@ -491,30 +445,14 @@ export const useBookingStore = defineStore('booking', () => {
 
   async function cancelBooking(citaId: string): Promise<boolean> {
     isCancelling.value = true
-
     try {
       const citaSnap = await getDoc(doc(db, 'citas', citaId))
+      if (!citaSnap.exists()) return false
+      const cita = citaSnap.data() as { barberoId: string; date: string; time: string }
 
-      if (!citaSnap.exists()) {
-        return false
-      }
-
-      const cita = citaSnap.data() as {
-        barberoId: string
-        date: string
-        time: string
-      }
-
-      await updateDoc(doc(db, 'citas', citaId), {
-        status: 'cancelada',
-      })
-
+      await updateDoc(doc(db, 'citas', citaId), { status: 'cancelada' })
       await setDoc(
-        doc(
-          db,
-          'disponibilidad',
-          getSlotId(cita.barberoId, cita.date, cita.time),
-        ),
+        doc(db, 'disponibilidad', getSlotId(cita.barberoId, cita.date, cita.time)),
         { status: 'cancelada' },
         { merge: true },
       )
@@ -524,7 +462,6 @@ export const useBookingStore = defineStore('booking', () => {
         clearStoredBooking()
         showStoredBooking.value = false
       }
-
       return true
     } catch (err) {
       console.error('No se pudo cancelar la cita', err)
@@ -543,6 +480,7 @@ export const useBookingStore = defineStore('booking', () => {
     currentStep,
     barberos,
     serviceCategories,
+    isLoadingServices,
     products,
     selectedBarberoId,
     selectedServiceId,
@@ -567,6 +505,7 @@ export const useBookingStore = defineStore('booking', () => {
     close,
     startNewBooking,
     refreshStoredBooking,
+    fetchServicesForBarbero,
     goToStep,
     next,
     back,

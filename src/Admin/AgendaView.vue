@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { collection, deleteDoc, doc, onSnapshot, orderBy, query, setDoc, updateDoc } from 'firebase/firestore'
+import { collection, deleteDoc, doc, onSnapshot, orderBy, query, setDoc, updateDoc, where } from 'firebase/firestore'
 import { db } from '../config/firebase'
-import { BARBEROS, formatLocalDate, getSlotId } from '../stores/booking'
+import { useAuthStore } from '../stores/auth'
+import { formatLocalDate, getSlotId, useBookingStore } from '../stores/booking'
 import StatCard from '../components/dashboard/StatCard.vue'
+
+const authStore = useAuthStore()
+const bookingStore = useBookingStore() // reuses its live `barberos` list for the filter dropdown
 
 type CitaStatus = 'pendiente' | 'confirmada' | 'completada' | 'cancelada' | 'no_asistio'
 
@@ -60,7 +64,16 @@ const citas = ref<Cita[]>([])
 let unsubscribe: (() => void) | null = null
 
 onMounted(() => {
-  const q = query(collection(db, 'citas'), orderBy('dateTime', 'asc'))
+  // Un empleado SOLO puede recibir de vuelta sus propias citas — esto no es
+  // solo una comodidad visual, las reglas de Firestore exigen este mismo
+  // filtro para no-admins (una consulta sin él sería rechazada por permisos).
+  const q = authStore.isAdmin
+    ? query(collection(db, 'citas'), orderBy('dateTime', 'asc'))
+    : query(
+        collection(db, 'citas'),
+        where('barberoId', '==', authStore.user?.uid ?? '__none__'),
+        orderBy('dateTime', 'asc'),
+      )
   unsubscribe = onSnapshot(q, (snapshot) => {
     citas.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Cita)
   })
@@ -71,6 +84,12 @@ onUnmounted(() => unsubscribe?.())
 const selectedDate = ref('') // "YYYY-MM-DD" from <input type="date">
 const selectedStatus = ref('todos')
 const selectedBarber = ref('todos')
+
+// No-admins don't get a barbero filter at all — their query already only
+// returns their own citas, so there's nothing else to pick.
+if (!authStore.isAdmin && authStore.user) {
+  selectedBarber.value = authStore.user.uid
+}
 
 const filteredCitas = computed(() => {
   return citas.value.filter((cita) => {
@@ -97,7 +116,7 @@ const groupedCitas = computed<CitaGroup[]>(() => {
     groups.set(cita.date, list)
   }
   return Array.from(groups.entries()).map(([dateKey, list]) => {
-    const d = list[0]!.dateTime.toDate()
+    const d = list[0].dateTime.toDate()
     return {
       dateKey,
       label: `${WEEKDAY_ABBR[d.getDay()]}, ${d.getDate()} de ${MONTH_ABBR[d.getMonth()]}`,
@@ -261,11 +280,12 @@ function refresh() {
           <option value="no_asistio">No asistió</option>
         </select>
         <select
+          v-if="authStore.isAdmin"
           v-model="selectedBarber"
           class="w-full sm:w-auto bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-[#c9a24b]/50"
         >
           <option value="todos">Todos los barberos</option>
-          <option v-for="barbero in BARBEROS" :key="barbero.id" :value="barbero.id">{{ barbero.name }}</option>
+          <option v-for="barbero in bookingStore.barberos" :key="barbero.id" :value="barbero.id">{{ barbero.name }}</option>
         </select>
       </div>
     </div>

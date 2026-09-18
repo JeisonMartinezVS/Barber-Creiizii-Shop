@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, reactive, ref } from 'vue'
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
-import { getFunctions, httpsCallable } from 'firebase/functions'
+import { collection, doc, onSnapshot, orderBy, query, setDoc } from 'firebase/firestore'
 import { db } from '../config/firebase'
-import { useAuthStore } from '../stores/auth'
+import { resolveEmail, useAuthStore } from '../stores/auth'
+import { createStaffAuthAccount, generateRandomPassword } from '../lib/createStaffAccount'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
 import ToggleSwitch from '../ui/ToggleSwitch.vue'
 
@@ -18,7 +18,6 @@ interface Empleado {
 }
 
 const authStore = useAuthStore()
-const functions = getFunctions()
 
 const empleados = ref<Empleado[]>([])
 let unsubscribe: (() => void) | null = null
@@ -26,7 +25,7 @@ let unsubscribe: (() => void) | null = null
 onMounted(() => {
   const q = query(collection(db, 'empleados'), orderBy('name'))
   unsubscribe = onSnapshot(q, (snapshot) => {
-    empleados.value = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Empleado)
+    empleados.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Empleado)
   })
 })
 onUnmounted(() => unsubscribe?.())
@@ -46,22 +45,22 @@ function deleteEmpleado(id: string) {
 const isModalOpen = ref(false)
 const isSubmitting = ref(false)
 const formError = ref('')
-const showPassword = ref(false)
 
 const form = reactive({
   name: '',
   email: '',
   phone: '',
-  password: '',
 })
+
+// Set once creation succeeds — drives the "send via WhatsApp" screen.
+const createdEmployee = ref<{ name: string; username: string; phone: string; password: string } | null>(null)
 
 function openModal() {
   form.name = ''
   form.email = ''
   form.phone = ''
-  form.password = ''
   formError.value = ''
-  showPassword.value = false
+  createdEmployee.value = null
   isModalOpen.value = true
 }
 function closeModal() {
@@ -69,32 +68,69 @@ function closeModal() {
   isModalOpen.value = false
 }
 
+function whatsappUrl(phone: string, name: string, username: string, password: string): string {
+  const digits = phone.replace(/\D/g, '')
+  const message =
+    `Hola ${name}, ya tienes acceso al panel de Barber Creiizii Shop.\n\n` +
+    `Usuario: ${username}\n` +
+    `Contraseña temporal: ${password}\n\n` +
+    `Cámbiala apenas puedas iniciar sesión.`
+  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
+}
+
 async function submitNewEmployee() {
   formError.value = ''
 
-  if (!form.name.trim() || !form.email.trim() || !form.password) {
-    formError.value = 'Nombre, correo y contraseña son obligatorios.'
-    return
-  }
-  if (form.password.length < 6) {
-    formError.value = 'La contraseña debe tener al menos 6 caracteres.'
+  if (!form.name.trim() || !form.email.trim() || !form.phone.trim()) {
+    formError.value = 'Nombre, correo/usuario y celular son obligatorios.'
     return
   }
 
+  const email = resolveEmail(form.email)
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  if (!isValidEmail) {
+    formError.value = `"${email}" no es un correo válido. Revisa que no tenga espacios y que VITE_ADMIN_EMAIL_DOMAIN esté configurado (revisa tu .env).`
+    return
+  }
+
+  const password = generateRandomPassword()
+
   isSubmitting.value = true
   try {
-    const createEmployee = httpsCallable(functions, 'createEmployee')
-    await createEmployee({
+    // 1. Crea la cuenta de Auth SIN afectar tu propia sesión de admin.
+    const uid = await createStaffAuthAccount(email, password)
+
+    // 2. Guarda su ficha en Firestore. Firestore rules exige que quien
+    //    escribe aquí ya sea admin — nunca desde este flujo directamente,
+    //    la regla revisa el documento de QUIEN está logueado ahora (tú).
+    await setDoc(doc(db, 'empleados', uid), {
       name: form.name.trim(),
-      email: form.email.trim(),
+      email,
       phone: form.phone.trim(),
-      password: form.password,
+      username: email.split('@')[0],
+      role: 'empleado',
+      active: true,
+      createdAt: new Date().toISOString(),
     })
-    // No need to manually add it to `empleados` — the onSnapshot listener
-    // above picks up the new Firestore doc automatically.
-    isModalOpen.value = false
+
+    createdEmployee.value = {
+      name: form.name.trim(),
+      username: email.split('@')[0],
+      phone: form.phone.trim(),
+      password,
+    }
   } catch (err: unknown) {
-    formError.value = err instanceof Error ? err.message : 'No se pudo crear el empleado.'
+    const code = (err as { code?: string })?.code
+    if (code === 'auth/email-already-in-use') {
+      formError.value = 'Ya existe una cuenta con ese correo/usuario.'
+    } else if (code === 'auth/invalid-email') {
+      formError.value = `Firebase rechazó "${email}" como correo. Revisa el valor de VITE_ADMIN_EMAIL_DOMAIN en tu .env.`
+    } else if (code === 'auth/weak-password') {
+      formError.value = 'La contraseña generada fue rechazada, intenta de nuevo.'
+    } else {
+      formError.value = 'No se pudo crear el empleado.'
+      console.error(err)
+    }
   } finally {
     isSubmitting.value = false
   }
@@ -128,9 +164,7 @@ async function submitNewEmployee() {
         class="bg-[#0e0e0e] border border-white/10 rounded-xl px-5 py-4 flex items-center justify-between"
       >
         <div class="flex items-center gap-4">
-          <div
-            class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-[#e2b95a] bg-gradient-to-b from-[#5a4420] to-[#3a2f12] border border-[#c9a24b]/30"
-          >
+          <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-[#e2b95a] bg-gradient-to-b from-[#5a4420] to-[#3a2f12] border border-[#c9a24b]/30">
             {{ initial(empleado.name) }}
           </div>
           <div>
@@ -142,10 +176,7 @@ async function submitNewEmployee() {
               >
                 Admin
               </span>
-              <span
-                v-else
-                class="text-[10px] uppercase tracking-wide border border-[#5b9bf7]/40 text-[#5b9bf7] rounded px-1.5 py-0.5"
-              >
+              <span v-else class="text-[10px] uppercase tracking-wide border border-[#5b9bf7]/40 text-[#5b9bf7] rounded px-1.5 py-0.5">
                 Empleado
               </span>
             </div>
@@ -190,7 +221,9 @@ async function submitNewEmployee() {
       <div v-if="isModalOpen" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
         <div class="w-full max-w-md bg-[#0e0e0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
           <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/10">
-            <h2 class="font-serif text-lg font-bold text-white">Nuevo empleado</h2>
+            <h2 class="font-serif text-lg font-bold text-white">
+              {{ createdEmployee ? '¡Empleado creado!' : 'Nuevo empleado' }}
+            </h2>
             <button
               type="button"
               class="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-white/50 hover:text-white hover:border-white/30 transition"
@@ -198,32 +231,50 @@ async function submitNewEmployee() {
               @click="closeModal"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
             </button>
           </div>
 
-          <form class="px-6 py-5 space-y-4" @submit.prevent="submitNewEmployee">
-            <!-- Foto: UI only for now, not wired up yet -->
-            <div class="flex flex-col items-center gap-2 mb-2">
-              <div
-                class="w-16 h-16 rounded-full border border-dashed border-white/20 flex items-center justify-center text-white/30"
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z" />
-                  <circle cx="12" cy="13" r="4" />
-                </svg>
-              </div>
-              <button
-                type="button"
-                disabled
-                class="text-xs text-white/30 border border-white/10 rounded-lg px-3 py-1.5 cursor-not-allowed"
-              >
-                Subir foto (próximamente)
-              </button>
+          <!-- Éxito: enviar credenciales por WhatsApp -->
+          <div v-if="createdEmployee" class="px-6 py-5">
+            <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-[#c9a24b]/10 border border-[#c9a24b]/30 flex items-center justify-center text-[#c9a24b]">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
             </div>
+            <p class="text-sm text-white/70 text-center mb-4">
+              <span class="text-white font-semibold">{{ createdEmployee.name }}</span> ya puede iniciar sesión.
+              Envíale su contraseña temporal por WhatsApp:
+            </p>
+            <div class="bg-[#151515] border border-white/10 rounded-lg px-4 py-3 mb-4 text-center">
+              <p class="text-xs text-white/40 mb-1">USUARIO</p>
+              <p class="text-sm text-white font-mono mb-2">{{ createdEmployee.username }}</p>
+              <p class="text-xs text-white/40 mb-1">CONTRASEÑA TEMPORAL</p>
+              <p class="text-lg text-[#c9a24b] font-mono tracking-wide">{{ createdEmployee.password }}</p>
+            </div>
+            <a
+              :href="whatsappUrl(createdEmployee.phone, createdEmployee.name, createdEmployee.username, createdEmployee.password)"
+              target="_blank"
+              rel="noopener"
+              class="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white font-semibold text-sm rounded-lg py-2.5 transition mb-3"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38a9.9 9.9 0 0 0 4.74 1.21h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2Z" />
+              </svg>
+              Enviar por WhatsApp
+            </a>
+            <button
+              type="button"
+              class="w-full text-sm text-white/50 hover:text-white transition"
+              @click="closeModal"
+            >
+              Cerrar
+            </button>
+          </div>
 
+          <!-- Formulario -->
+          <form v-else class="px-6 py-5 space-y-4" @submit.prevent="submitNewEmployee">
             <div>
               <label class="block text-xs tracking-wide text-white/40 mb-1.5">NOMBRE COMPLETO</label>
               <input
@@ -235,17 +286,17 @@ async function submitNewEmployee() {
             </div>
 
             <div>
-              <label class="block text-xs tracking-wide text-white/40 mb-1.5">CORREO</label>
+              <label class="block text-xs tracking-wide text-white/40 mb-1.5">CORREO O USUARIO</label>
               <input
                 v-model="form.email"
-                type="email"
-                placeholder="empleado@creiizii.com"
+                type="text"
+                placeholder="empleado@creiizii.com o solo 'yeison'"
                 class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
               />
             </div>
 
             <div>
-              <label class="block text-xs tracking-wide text-white/40 mb-1.5">CELULAR</label>
+              <label class="block text-xs tracking-wide text-white/40 mb-1.5">CELULAR (WHATSAPP)</label>
               <input
                 v-model="form.phone"
                 type="tel"
@@ -254,30 +305,10 @@ async function submitNewEmployee() {
               />
             </div>
 
-            <div>
-              <label class="block text-xs tracking-wide text-white/40 mb-1.5">CONTRASEÑA</label>
-              <div class="relative">
-                <input
-                  v-model="form.password"
-                  :type="showPassword ? 'text' : 'password'"
-                  placeholder="Mínimo 6 caracteres"
-                  class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 pr-10 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
-                />
-                <button
-                  type="button"
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition"
-                  @click="showPassword = !showPassword"
-                >
-                  <svg v-if="!showPassword" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" /><circle cx="12" cy="12" r="3" />
-                  </svg>
-                  <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.6 21.6 0 0 1 5.06-5.94M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 7 11 7a21.6 21.6 0 0 1-3.24 4.39M14.12 14.12a3 3 0 1 1-4.24-4.24" />
-                    <line x1="1" y1="1" x2="23" y2="23" />
-                  </svg>
-                </button>
-              </div>
-            </div>
+            <p class="text-xs text-white/30">
+              La contraseña se genera sola — no la escribes tú. En el siguiente paso te doy el link de WhatsApp
+              ya armado con el mensaje para enviársela.
+            </p>
 
             <p v-if="formError" class="text-xs text-red-400">{{ formError }}</p>
 
