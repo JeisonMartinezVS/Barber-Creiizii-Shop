@@ -176,7 +176,7 @@ const mapEmbedUrl =
         class="mt-16 pt-8 border-t border-primary/20 flex flex-col md:flex-row items-center justify-between gap-4"
       >
         <p class="text-muted-foreground text-sm text-center md:text-left">
-          &copy; {{ new Date().getFullYear() }} Barber Creiizii Shop. Todos los derechos
+          &copy; {{ new Date().getFullYear() }} JeiXSoft. Todos los derechos
           reservados.
         </p>
         <div class="flex items-center gap-3">

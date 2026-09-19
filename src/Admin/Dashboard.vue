@@ -48,6 +48,7 @@ const navItems: NavItem[] = [
     name: 'cortes',
     label: 'Cortes',
     enabled: true,
+    adminOnly: true,
     icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" />
             <line x1="20" y1="4" x2="8.12" y2="15.88" /><line x1="14.47" y1="14.48" x2="20" y2="20" /><line x1="8.12" y1="8.12" x2="12" y2="12" />
@@ -165,19 +166,6 @@ async function handleLogout() {
       </div>
 
       <div class="px-3 py-4 border-t border-white/10 space-y-1">
-        <a
-          href="/"
-          target="_blank"
-          rel="noopener"
-          class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-white/40 hover:text-white/70 hover:bg-white/5 transition"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-            <polyline points="15 3 21 3 21 9" />
-            <line x1="10" y1="14" x2="21" y2="3" />
-          </svg>
-          Ver sitio web
-        </a>
         <button
           type="button"
           class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-white/40 hover:text-white/70 hover:bg-white/5 transition"
