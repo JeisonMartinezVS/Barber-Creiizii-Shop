@@ -44,6 +44,22 @@ export interface Product {
   price: number
 }
 
+export interface DaySchedule {
+  label: string
+  enabled: boolean
+  start: string // "HH:MM"
+  end: string
+}
+
+// getDay(): 0 = Domingo ... 6 = Sábado — this order matches that everywhere.
+export const WEEKDAY_LABELS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+
+// Used for any barbero who hasn't set up their own horario yet in
+// TimeView.vue — sensible default so nothing breaks before they touch it.
+export function defaultSchedule(): DaySchedule[] {
+  return WEEKDAY_LABELS.map((label) => ({ label, enabled: true, start: '10:00', end: '21:00' }))
+}
+
 export interface StoredBooking {
   citaId: string
   customerName: string
@@ -140,9 +156,9 @@ export const useBookingStore = defineStore('booking', () => {
   // ya no es una lista quemada. Se arranca una sola vez, igual que products.
   const barberos = ref<Barbero[]>([])
 
-onSnapshot(
+  onSnapshot(
   collection(db, 'empleados'),
-  (snapshot) => {
+    (snapshot) => {
     console.log(
       'EMPLEADOS FIREBASE:',
       snapshot.docs.map((doc) => ({
@@ -162,9 +178,9 @@ onSnapshot(
         } as Barbero
       })
       .sort((a, b) => a.name.localeCompare(b.name))
-  },
+    },
   (err) => console.error('No se pudieron cargar los empleados', err),
-)
+  )
 
   const serviceCategories = ref<ServiceCategory[]>([])
   const isLoadingServices = ref(false)
@@ -230,18 +246,25 @@ onSnapshot(
     () => customer.name.trim().length > 0 && customer.phone.trim().length > 0,
   )
 
-  // Cada barbero tiene SU PROPIA lista de servicios/precios, guardada en
-  // empleados/{barberoId}.services — se recarga cada vez que se elige un
-  // barbero distinto en el wizard.
+  // Cada barbero tiene SU PROPIO horario y lista de servicios/precios,
+  // guardados en empleados/{barberoId} — se recargan cada vez que se elige
+  // un barbero distinto en el wizard.
+  const selectedBarberoSchedule = ref<DaySchedule[]>(defaultSchedule())
+
   async function fetchServicesForBarbero(barberoId: string) {
     isLoadingServices.value = true
     try {
       const snap = await getDoc(doc(db, 'empleados', barberoId))
-      const data = snap.exists() ? (snap.data() as { services?: RawService[] }) : undefined
+      const data = snap.exists()
+        ? (snap.data() as { services?: RawService[]; schedule?: DaySchedule[] })
+        : undefined
       serviceCategories.value = parseServiceCategories(data?.services)
+      selectedBarberoSchedule.value =
+        Array.isArray(data?.schedule) && data.schedule.length === 7 ? data.schedule : defaultSchedule()
     } catch (err) {
       console.error('No se pudieron cargar los servicios del barbero', err)
       serviceCategories.value = []
+      selectedBarberoSchedule.value = defaultSchedule()
     } finally {
       isLoadingServices.value = false
     }
@@ -322,6 +345,7 @@ onSnapshot(
     selectedTime.value = null
     selectedProductIds.value = new Set()
     serviceCategories.value = []
+    selectedBarberoSchedule.value = defaultSchedule()
     bookedTimes.value = []
     customer.name = ''
     customer.phone = ''
@@ -481,6 +505,7 @@ onSnapshot(
     barberos,
     serviceCategories,
     isLoadingServices,
+    selectedBarberoSchedule,
     products,
     selectedBarberoId,
     selectedServiceId,

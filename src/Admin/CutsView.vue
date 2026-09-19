@@ -32,6 +32,11 @@ interface Producto {
 const authStore = useAuthStore()
 const bookingStore = useBookingStore()
 
+// Estas tres siempre deben poder elegirse, incluso para un barbero que
+// todavía no tiene ningún corte registrado (antes el selector salía vacío
+// en ese caso, porque las opciones solo venían de los datos existentes).
+const DEFAULT_SERVICE_TITLES = ['Corte de Cabello', 'Barba', 'Cejas']
+
 // Admin puede ver/editar los precios de CUALQUIER barbero; un empleado solo
 // ve/edita los suyos — ni siquiera hay selector para él.
 const targetBarberoId = ref<string | null>(authStore.isAdmin ? null : (authStore.user?.uid ?? null))
@@ -50,7 +55,7 @@ watch(
 
 const productos = ref<Producto[]>([])
 const services = ref<Service[]>([])
-const serviceTitles = ref<string[]>([])
+const serviceTitles = ref<string[]>([...DEFAULT_SERVICE_TITLES])
 const loading = ref(true)
 const loadError = ref('')
 
@@ -96,7 +101,9 @@ function subscribeToBarbero(barberoId: string) {
       })
 
       productos.value = items
-      serviceTitles.value = Array.from(titles)
+      serviceTitles.value = Array.from(
+        new Set([...DEFAULT_SERVICE_TITLES, ...titles]),
+      )
     },
     (err) => {
       loading.value = false
@@ -189,9 +196,12 @@ async function saveProduct() {
       const newServiceIndex = updatedServices.findIndex(
         (service) => String(service.title || '').trim() === form.title.trim(),
       )
-      if (newServiceIndex === -1) {
-        formError.value = 'No se encontró el servicio seleccionado.'
-        return
+      let targetServiceIndex = newServiceIndex
+      if (targetServiceIndex === -1) {
+        // Este barbero todavía no tiene esta categoría (p. ej. "Barba" por
+        // primera vez) — se crea vacía en vez de fallar.
+        updatedServices.push({ title: form.title.trim(), items: [] })
+        targetServiceIndex = updatedServices.length - 1
       }
       const item = currentService.items[producto.itemIndex]
       if (!item) {
@@ -199,10 +209,10 @@ async function saveProduct() {
         return
       }
 
-      if (newServiceIndex === producto.serviceIndex) {
+      if (targetServiceIndex === producto.serviceIndex) {
         currentService.items[producto.itemIndex] = { ...item, name: form.name.trim(), price: form.price.trim() }
       } else {
-        const newService = updatedServices[newServiceIndex]
+        const newService = updatedServices[targetServiceIndex]
         if (!newService) {
           formError.value = 'No se encontró el servicio seleccionado.'
           return
@@ -212,12 +222,13 @@ async function saveProduct() {
         currentService.items.splice(producto.itemIndex, 1)
       }
     } else {
-      const serviceIndex = updatedServices.findIndex(
+      let serviceIndex = updatedServices.findIndex(
         (service) => String(service.title || '').trim() === form.title.trim(),
       )
       if (serviceIndex === -1) {
-        formError.value = 'No se encontró el servicio seleccionado.'
-        return
+        // Primera vez que este barbero usa esta categoría — se crea.
+        updatedServices.push({ title: form.title.trim(), items: [] })
+        serviceIndex = updatedServices.length - 1
       }
       const service = updatedServices[serviceIndex]
       if (!service) {

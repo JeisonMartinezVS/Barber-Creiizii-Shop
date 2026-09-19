@@ -11,30 +11,17 @@ const stepIcons: Record<string, string> = {
   Datos: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`,
   Productos: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>`,
 }
-
 const checkIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>`
 
 const DAY_ABBREV = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
-
 const MONTHS = [
-  'Enero',
-  'Febrero',
-  'Marzo',
-  'Abril',
-  'Mayo',
-  'Junio',
-  'Julio',
-  'Agosto',
-  'Septiembre',
-  'Octubre',
-  'Noviembre',
-  'Diciembre',
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ]
 
 const days = computed(() => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
-
   return Array.from({ length: 14 }, (_, i) => {
     const d = new Date(today)
     d.setDate(today.getDate() + i)
@@ -46,42 +33,41 @@ function isSameDay(a: Date, b: Date) {
   return a.toDateString() === b.toDateString()
 }
 
+function isDayEnabled(day: Date): boolean {
+  const daySchedule = store.selectedBarberoSchedule[day.getDay()]
+  return daySchedule ? daySchedule.enabled : true
+}
+
+// Appointments need at least this much lead time — also means "10:00" never
+// shows up as bookable at 10:05am, only from the next slot forward.
 const MIN_LEAD_MINUTES = 30
 
 const timeSlots = computed(() => {
-  const allSlots: string[] = []
+  if (!store.selectedDate) return []
 
-  for (
-    let minutes = 10 * 60;
-    minutes <= 20 * 60 + 30;
-    minutes += 30
-  ) {
+  const daySchedule = store.selectedBarberoSchedule[store.selectedDate.getDay()]
+  if (!daySchedule || !daySchedule.enabled) return []
+
+  const [startH = 10, startM = 0] = daySchedule.start.split(':').map(Number)
+  const [endH = 20, endM = 30] = daySchedule.end.split(':').map(Number)
+  const startMinutes = startH * 60 + startM
+  const endMinutes = endH * 60 + endM
+
+  const allSlots: string[] = []
+  for (let minutes = startMinutes; minutes <= endMinutes; minutes += 30) {
     const h = Math.floor(minutes / 60)
     const m = minutes % 60
-
-    allSlots.push(
-      `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
-    )
+    allSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
   }
 
-  let result = allSlots.filter(
-    (slot) => !store.bookedTimes.includes(slot),
-  )
+  let result = allSlots.filter((slot) => !store.bookedTimes.includes(slot))
 
-  if (
-    store.selectedDate &&
-    isSameDay(store.selectedDate, new Date())
-  ) {
-    const cutoff = new Date(
-      Date.now() + MIN_LEAD_MINUTES * 60000,
-    )
-
+  if (isSameDay(store.selectedDate, new Date())) {
+    const cutoff = new Date(Date.now() + MIN_LEAD_MINUTES * 60000)
     result = result.filter((slot) => {
       const [h = 0, m = 0] = slot.split(':').map(Number)
-
       const slotDate = new Date(store.selectedDate as Date)
       slotDate.setHours(h, m, 0, 0)
-
       return slotDate > cutoff
     })
   }
@@ -91,66 +77,33 @@ const timeSlots = computed(() => {
 
 const fechaLarga = computed(() => {
   if (!store.selectedDate) return ''
-
   const d = store.selectedDate
-
-  const weekday = [
-    'Domingo',
-    'Lunes',
-    'Martes',
-    'Miércoles',
-    'Jueves',
-    'Viernes',
-    'Sábado',
-  ][d.getDay()]
-
+  const weekday = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][d.getDay()]
   return `${weekday}, ${d.getDate()} De ${MONTHS[d.getMonth()]} De ${d.getFullYear()}`
 })
 
+// Only steps with something to validate show a hint/blocking state; the
+// rest (Barbero/Servicio) auto-advance the instant something is picked.
 const footerHint = computed(() => {
-  if (
-    store.currentStep === 'Barbero' &&
-    !store.selectedBarbero
-  ) {
-    return 'Selecciona un barbero para continuar'
-  }
-
-  if (
-    store.currentStep === 'Servicio' &&
-    !store.selectedService
-  ) {
-    return 'Selecciona un servicio para continuar'
-  }
-
+  if (store.currentStep === 'Barbero' && !store.selectedBarbero) return 'Selecciona un barbero para continuar'
+  if (store.currentStep === 'Servicio' && !store.selectedService) return 'Selecciona un servicio para continuar'
   return ''
 })
 
-const isSpecialScreen = computed(
-  () => store.isConfirmed || store.showStoredBooking,
-)
+// "Special" screens (stored booking / just confirmed) replace the whole
+// wizard chrome — no step counter, no breadcrumb, no wizard footer.
+const isSpecialScreen = computed(() => store.isConfirmed || store.showStoredBooking)
 
 function initial(name: string) {
   return name.charAt(0).toUpperCase()
 }
 
-const SHOP_ADDRESS =
-  'Cra. 95 #88-40, Aures II, Medellín, Antioquia, Colombia'
+const SHOP_ADDRESS = 'Cra. 95 #88-40, Aures II, Medellín, Antioquia, Colombia'
 
-function buildGoogleCalendarUrl(opts: {
-  title: string
-  start: Date
-  durationMinutes: number
-  details: string
-}) {
+function buildGoogleCalendarUrl(opts: { title: string; start: Date; durationMinutes: number; details: string }) {
   const pad = (n: number) => String(n).padStart(2, '0')
-
-  const fmt = (d: Date) =>
-    `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`
-
-  const end = new Date(
-    opts.start.getTime() + opts.durationMinutes * 60000,
-  )
-
+  const fmt = (d: Date) => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`
+  const end = new Date(opts.start.getTime() + opts.durationMinutes * 60000)
   const params = new URLSearchParams({
     action: 'TEMPLATE',
     text: opts.title,
@@ -158,41 +111,27 @@ function buildGoogleCalendarUrl(opts: {
     details: opts.details,
     location: SHOP_ADDRESS,
   })
-
   return `https://calendar.google.com/calendar/render?${params.toString()}`
 }
 
+// The button on the "just confirmed" success screen.
 const justConfirmedGCalUrl = computed(() => {
-  if (
-    !store.selectedService ||
-    !store.selectedBarbero ||
-    !store.selectedDate ||
-    !store.selectedTime
-  ) {
-    return '#'
-  }
-
-  const [h = 0, m = 0] = store.selectedTime
-    .split(':')
-    .map(Number)
-
+  if (!store.selectedService || !store.selectedBarbero || !store.selectedDate || !store.selectedTime) return '#'
+  const [h = 0, m = 0] = store.selectedTime.split(':').map(Number)
   const start = new Date(store.selectedDate)
   start.setHours(h, m, 0, 0)
-
   return buildGoogleCalendarUrl({
     title: `${store.selectedService.name} — Barber Creiizii Shop`,
     start,
-    durationMinutes:
-      parseInt(store.selectedService.duration, 10) || 30,
+    durationMinutes: parseInt(store.selectedService.duration, 10) || 30,
     details: `Cita con ${store.selectedBarbero.name} en Barber Creiizii Shop.`,
   })
 })
 
+// The button on the "you already have a booking" screen (returning visit).
 const storedGCalUrl = computed(() => {
   const b = store.storedBooking
-
   if (!b) return '#'
-
   return buildGoogleCalendarUrl({
     title: `${b.serviceName} — Barber Creiizii Shop`,
     start: new Date(b.dateTimeISO),
@@ -203,94 +142,51 @@ const storedGCalUrl = computed(() => {
 
 const storedFechaLarga = computed(() => {
   if (!store.storedBooking) return ''
-
   const d = new Date(store.storedBooking.dateTimeISO)
-
-  const weekday = [
-    'Domingo',
-    'Lunes',
-    'Martes',
-    'Miércoles',
-    'Jueves',
-    'Viernes',
-    'Sábado',
-  ][d.getDay()]
-
+  const weekday = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][d.getDay()]
   return `${weekday}, ${d.getDate()} de ${MONTHS[d.getMonth()]}`
 })
 
+// Local UI flag: once the person cancels from the "just booked" success
+// screen, swap its two buttons for a plain confirmation instead of leaving
+// a dead "cancel a cancelled booking" button.
 const cancelledJustNow = ref(false)
 
 async function handleCancelJustConfirmed() {
   if (!store.lastCreatedCitaId) return
-
-  const ok = await store.cancelBooking(
-    store.lastCreatedCitaId,
-  )
-
-  if (ok) {
-    cancelledJustNow.value = true
-  }
+  const ok = await store.cancelBooking(store.lastCreatedCitaId)
+  if (ok) cancelledJustNow.value = true
 }
-
 async function handleCancelStored() {
   if (!store.storedBooking) return
-
-  const ok = await store.cancelBooking(
-    store.storedBooking.citaId,
-  )
-
-  if (ok) {
-    store.startNewBooking()
-  }
+  const ok = await store.cancelBooking(store.storedBooking.citaId)
+  if (ok) store.startNewBooking()
 }
 </script>
 
 <template>
   <Teleport to="body">
-    <div
-      class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4 py-8"
-    >
+    <div class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4 py-8">
       <div class="relative w-full max-w-lg">
         <div
           class="absolute inset-x-6 -top-px h-px bg-gradient-to-r from-transparent via-primary to-transparent"
         ></div>
-
-        <div
-          class="bg-[#0e0e0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
-        >
+        <div class="bg-[#0e0e0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
           <!-- Header -->
-          <div
-            class="flex items-start justify-between px-6 pt-5 pb-4 border-b border-white/10 shrink-0"
-          >
+          <div class="flex items-start justify-between px-6 pt-5 pb-4 border-b border-white/10 shrink-0">
             <div>
-              <h2 class="font-serif text-xl font-bold text-white">
-                Reservar Cita
-              </h2>
-
-              <p
-                v-if="!isSpecialScreen"
-                class="text-xs text-primary mt-1"
-              >
-                Paso {{ store.currentStepIndex + 1 }} de
-                {{ STEPS.length }} — {{ store.currentStep }}
+              <h2 class="font-serif text-xl font-bold text-white">Reservar Cita</h2>
+              <p v-if="!isSpecialScreen" class="text-xs text-primary mt-1">
+                Paso {{ store.currentStepIndex + 1 }} de {{ STEPS.length }} — {{ store.currentStep }}
               </p>
             </div>
-
             <button
               type="button"
               class="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-white/50 hover:text-white hover:border-white/30 transition shrink-0"
               aria-label="Cerrar"
               @click="store.close"
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
@@ -302,19 +198,12 @@ async function handleCancelStored() {
             v-if="!isSpecialScreen"
             class="flex items-center justify-center gap-2 px-4 py-3 border-b border-white/10 overflow-x-auto shrink-0"
           >
-            <template
-              v-for="(step, index) in STEPS"
-              :key="step"
-            >
+            <template v-for="(step, index) in STEPS" :key="step">
               <button
                 type="button"
                 class="flex items-center gap-1.5 shrink-0"
                 :disabled="index > store.currentStepIndex"
-                @click="
-                  index < store.currentStepIndex
-                    ? store.goToStep(index)
-                    : null
-                "
+                @click="index < store.currentStepIndex ? store.goToStep(index) : null"
               >
                 <span
                   class="w-6 h-6 rounded-full border flex items-center justify-center"
@@ -325,33 +214,16 @@ async function handleCancelStored() {
                         ? 'border-primary text-primary'
                         : 'border-white/15 text-white/30'
                   "
-                  v-html="
-                    index < store.currentStepIndex
-                      ? checkIcon
-                      : stepIcons[step]
-                  "
+                  v-html="index < store.currentStepIndex ? checkIcon : stepIcons[step]"
                 ></span>
-
                 <span
-                  class="text-xs whitespace-nowrap hidden md:flex"
-                  :class="
-                    index === store.currentStepIndex
-                      ? 'text-primary'
-                      : index < store.currentStepIndex
-                        ? 'text-white/60'
-                        : 'text-white/30'
-                  "
+                  class="text-xs whitespace-nowrap"
+                  :class="index === store.currentStepIndex ? 'text-primary' : index < store.currentStepIndex ? 'text-white/60' : 'text-white/30'"
                 >
                   {{ step }}
                 </span>
               </button>
-
-              <span
-                v-if="index < STEPS.length - 1"
-                class="text-white/15 text-xs"
-              >
-                ›
-              </span>
+              <span v-if="index < STEPS.length - 1" class="text-white/15 text-xs">›</span>
             </template>
           </div>
 
@@ -364,78 +236,31 @@ async function handleCancelStored() {
               {{ store.submitError }}
             </p>
 
-            <!-- Stored booking -->
-            <div
-              v-if="
-                store.showStoredBooking &&
-                store.storedBooking
-              "
-              class="py-6"
-            >
-              <div
-                class="w-14 h-14 mx-auto mb-4 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary"
-              >
-                <svg
-                  width="26"
-                  height="26"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <rect
-                    x="3"
-                    y="4"
-                    width="18"
-                    height="18"
-                    rx="2"
-                  />
+            <!-- Ya tienes una cita agendada (localStorage + verificación en Firestore) -->
+            <div v-if="store.showStoredBooking && store.storedBooking" class="py-6">
+              <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" />
                   <path d="M16 2v4M8 2v4M3 10h18" />
                 </svg>
               </div>
-
-              <h3
-                class="font-serif text-lg font-bold text-white text-center mb-1"
-              >
-                Ya tienes una cita agendada
-              </h3>
-
-              <p
-                class="text-sm text-white/50 text-center mb-5"
-              >
-                {{ storedFechaLarga }} a las
-                {{ store.storedBooking.time }} con
-                {{ store.storedBooking.barberoName }}.
+              <h3 class="font-serif text-lg font-bold text-white text-center mb-1">Ya tienes una cita agendada</h3>
+              <p class="text-sm text-white/50 text-center mb-5">
+                {{ storedFechaLarga }} a las {{ store.storedBooking.time }} con {{ store.storedBooking.barberoName }}.
               </p>
 
-              <div
-                class="border border-white/10 rounded-xl p-4 mb-5 space-y-1.5"
-              >
-                <div
-                  class="flex items-center justify-between text-sm"
-                >
+              <div class="border border-white/10 rounded-xl p-4 mb-5 space-y-1.5">
+                <div class="flex items-center justify-between text-sm">
                   <span class="text-white/50">Servicio</span>
-                  <span class="text-white font-semibold">
-                    {{ store.storedBooking.serviceName }}
-                  </span>
+                  <span class="text-white font-semibold">{{ store.storedBooking.serviceName }}</span>
                 </div>
-
-                <div
-                  class="flex items-center justify-between text-sm"
-                >
+                <div class="flex items-center justify-between text-sm">
                   <span class="text-white/50">Barbero</span>
-                  <span class="text-white font-semibold">
-                    {{ store.storedBooking.barberoName }}
-                  </span>
+                  <span class="text-white font-semibold">{{ store.storedBooking.barberoName }}</span>
                 </div>
-
-                <div
-                  class="flex items-center justify-between text-sm pt-1.5 border-t border-white/10"
-                >
+                <div class="flex items-center justify-between text-sm pt-1.5 border-t border-white/10">
                   <span class="text-white/50">Total</span>
-                  <span class="text-primary font-bold">
-                    {{ formatCOP(store.storedBooking.total) }}
-                  </span>
+                  <span class="text-primary font-bold">{{ formatCOP(store.storedBooking.total) }}</span>
                 </div>
               </div>
 
@@ -446,79 +271,35 @@ async function handleCancelStored() {
                   class="flex-1 text-sm font-semibold text-white bg-red-600 hover:bg-red-500 disabled:opacity-50 rounded-lg py-2.5 transition"
                   @click="handleCancelStored"
                 >
-                  {{
-                    store.isCancelling
-                      ? 'Cancelando...'
-                      : 'Cancelar cita'
-                  }}
+                  {{ store.isCancelling ? 'Cancelando...' : 'Cancelar cita' }}
                 </button>
-
                 <a
                   :href="storedGCalUrl"
                   target="_blank"
                   rel="noopener"
                   class="flex-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-white border border-white/15 hover:border-white/30 rounded-lg py-2.5 transition"
                 >
-                  <svg
-                    width="15"
-                    height="15"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <rect
-                      x="3"
-                      y="4"
-                      width="18"
-                      height="18"
-                      rx="2"
-                    />
-                    <path d="M16 2v4M8 2v4M3 10h18" />
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
                   </svg>
                   Google Calendar
                 </a>
               </div>
-
-              <button
-                type="button"
-                class="w-full text-sm font-semibold text-primary hover:underline py-1"
-                @click="store.startNewBooking"
-              >
+              <button type="button" class="w-full text-sm font-semibold text-primary hover:underline py-1" @click="store.startNewBooking">
                 Agendar una nueva cita
               </button>
             </div>
 
-            <!-- Success screen -->
-            <div
-              v-else-if="store.isConfirmed"
-              class="py-8 text-center"
-            >
-              <div
-                class="w-14 h-14 mx-auto mb-4 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary"
-              >
-                <svg
-                  width="26"
-                  height="26"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
+            <!-- Success screen (justo después de confirmar) -->
+            <div v-else-if="store.isConfirmed" class="py-8 text-center">
+              <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               </div>
-
-              <h3
-                class="font-serif text-lg font-bold text-white mb-1"
-              >
-                ¡Cita reservada!
-              </h3>
-
+              <h3 class="font-serif text-lg font-bold text-white mb-1">¡Cita reservada!</h3>
               <p class="text-sm text-white/50 mb-6">
-                Te esperamos {{ fechaLarga }} a las
-                {{ store.selectedTime }} con
-                {{ store.selectedBarbero?.name }}.
+                Te esperamos {{ fechaLarga }} a las {{ store.selectedTime }} con {{ store.selectedBarbero?.name }}.
               </p>
 
               <template v-if="!cancelledJustNow">
@@ -529,54 +310,26 @@ async function handleCancelStored() {
                     class="flex-1 text-sm font-semibold text-white bg-red-600 hover:bg-red-500 disabled:opacity-50 rounded-lg py-2.5 transition"
                     @click="handleCancelJustConfirmed"
                   >
-                    {{
-                      store.isCancelling
-                        ? 'Cancelando...'
-                        : 'Cancelar cita'
-                    }}
+                    {{ store.isCancelling ? 'Cancelando...' : 'Cancelar cita' }}
                   </button>
-
                   <a
                     :href="justConfirmedGCalUrl"
                     target="_blank"
                     rel="noopener"
                     class="flex-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-white border border-white/15 hover:border-white/30 rounded-lg py-2.5 transition"
                   >
-                    <svg
-                      width="15"
-                      height="15"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <rect
-                        x="3"
-                        y="4"
-                        width="18"
-                        height="18"
-                        rx="2"
-                      />
-                      <path d="M16 2v4M8 2v4M3 10h18" />
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
                     </svg>
                     Google Calendar
                   </a>
                 </div>
-
-                <button
-                  type="button"
-                  class="text-sm text-white/40 hover:text-white/70 transition"
-                  @click="store.close"
-                >
+                <button type="button" class="text-sm text-white/40 hover:text-white/70 transition" @click="store.close">
                   Cerrar
                 </button>
               </template>
-
               <template v-else>
-                <p class="text-sm text-red-400 mb-4">
-                  Tu cita fue cancelada.
-                </p>
-
+                <p class="text-sm text-red-400 mb-4">Tu cita fue cancelada.</p>
                 <button
                   type="button"
                   class="bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] text-[#1a1408] font-semibold text-sm rounded-lg px-6 py-2.5 transition"
@@ -587,33 +340,15 @@ async function handleCancelStored() {
               </template>
             </div>
 
-            <!-- Saving state -->
-            <div
-              v-else-if="
-                store.isSubmitting &&
-                store.currentStep === 'Productos'
-              "
-              class="py-16 text-center"
-            >
-              <div
-                class="w-8 h-8 mx-auto mb-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin"
-              ></div>
-
-              <p class="text-sm text-white/40">
-                Guardando tu cita...
-              </p>
+            <!-- Saving state (between clicking Confirmar and Firestore responding) -->
+            <div v-else-if="store.isSubmitting && store.currentStep === 'Productos'" class="py-16 text-center">
+              <div class="w-8 h-8 mx-auto mb-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin"></div>
+              <p class="text-sm text-white/40">Guardando tu cita...</p>
             </div>
 
             <!-- Step 1: Barbero -->
-            <template
-              v-else-if="store.currentStep === 'Barbero'"
-            >
-              <p
-                class="text-xs tracking-wide text-white/40 mb-3"
-              >
-                ELIGE TU BARBERO
-              </p>
-
+            <template v-else-if="store.currentStep === 'Barbero'">
+              <p class="text-xs tracking-wide text-white/40 mb-3">ELIGE TU BARBERO</p>
               <div class="space-y-3">
                 <button
                   v-for="barbero in store.barberos"
@@ -628,34 +363,15 @@ async function handleCancelStored() {
                   @click="store.selectBarbero(barbero.id)"
                 >
                   <div class="flex items-center gap-3">
-                    <div
-                      class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-[#e2b95a] bg-gradient-to-b from-[#5a4420] to-[#3a2f12] border border-primary/30"
-                    >
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-[#e2b95a] bg-gradient-to-b from-[#5a4420] to-[#3a2f12] border border-primary/30">
                       {{ initial(barbero.name) }}
                     </div>
-
                     <div>
-                      <p
-                        class="text-sm font-semibold text-white"
-                      >
-                        {{ barbero.name }}
-                      </p>
-
-                      <p class="text-xs text-white/40">
-                        {{ barbero.role }}
-                      </p>
+                      <p class="text-sm font-semibold text-white">{{ barbero.name }}</p>
+                      <p class="text-xs text-white/40">{{ barbero.role }}</p>
                     </div>
                   </div>
-
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    class="text-white/30 shrink-0"
-                  >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-white/30 shrink-0">
                     <polyline points="9 18 15 12 9 6" />
                   </svg>
                 </button>
@@ -663,64 +379,35 @@ async function handleCancelStored() {
             </template>
 
             <!-- Step 2: Servicio -->
-            <template
-              v-else-if="store.currentStep === 'Servicio'"
-            >
+            <template v-else-if="store.currentStep === 'Servicio'">
               <div
                 v-if="store.selectedBarbero"
                 class="flex items-center justify-between px-4 py-3 rounded-xl border border-white/10 mb-5"
               >
                 <div class="flex items-center gap-3">
-                  <div
-                    class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-[#e2b95a] bg-gradient-to-b from-[#5a4420] to-[#3a2f12] border border-primary/30"
-                  >
+                  <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-[#e2b95a] bg-gradient-to-b from-[#5a4420] to-[#3a2f12] border border-primary/30">
                     {{ initial(store.selectedBarbero.name) }}
                   </div>
-
-                  <p
-                    class="text-sm font-semibold text-white"
-                  >
-                    {{ store.selectedBarbero.name }}
-                  </p>
+                  <p class="text-sm font-semibold text-white">{{ store.selectedBarbero.name }}</p>
                 </div>
-
-                <button
-                  type="button"
-                  class="text-xs font-semibold text-primary hover:underline"
-                  @click="store.goToStep(0)"
-                >
+                <button type="button" class="text-xs font-semibold text-primary hover:underline" @click="store.goToStep(0)">
                   Cambiar
                 </button>
               </div>
 
-              <div
-                v-if="store.serviceCategories.length === 0"
-                class="py-8 text-center"
-              >
-                <p class="text-sm text-white/40">
-                  No hay servicios disponibles.
-                </p>
-              </div>
+              <p v-if="store.isLoadingServices" class="text-sm text-white/30 text-center py-10">
+                Cargando servicios de {{ store.selectedBarbero?.name }}...
+              </p>
+              <p v-else-if="store.serviceCategories.length === 0" class="text-sm text-white/30 text-center py-10">
+                {{ store.selectedBarbero?.name }} todavía no tiene servicios configurados.
+              </p>
 
-              <div
-                v-for="category in store.serviceCategories"
-                :key="category.id"
-                class="mb-6 last:mb-0"
-              >
-                <p
-                  class="flex items-center gap-3 text-xs tracking-widest text-primary mb-3"
-                >
-                  <span
-                    class="w-6 h-px bg-primary/40"
-                  ></span>
-
+              <div v-for="category in store.serviceCategories" :key="category.id" class="mb-6 last:mb-0">
+                <p class="flex items-center gap-3 text-xs tracking-widest text-primary mb-3">
+                  <span class="w-6 h-px bg-primary/40"></span>
                   {{ category.title.toUpperCase() }}
-
-                  <span
-                    class="flex-1 h-px bg-primary/40"
-                  ></span>
+                  <span class="flex-1 h-px bg-primary/40"></span>
                 </p>
-
                 <div class="space-y-3">
                   <button
                     v-for="item in category.items"
@@ -734,97 +421,63 @@ async function handleCancelStored() {
                     "
                     @click="store.selectService(item.id)"
                   >
-                    <p
-                      class="text-sm font-semibold text-white"
-                    >
-                      {{ item.name }}
-                    </p>
-
-                    <p
-                      class="text-sm font-bold text-primary shrink-0 ml-4"
-                    >
-                      {{ formatCOP(item.price) }}
-                    </p>
+                    <div>
+                      <p class="text-sm font-semibold text-white">{{ item.name }}</p>
+                      <p class="text-xs text-white/40">{{ item.description }}</p>
+                    </div>
+                    <div class="text-right shrink-0 ml-4">
+                      <p class="text-sm font-bold text-primary">{{ formatCOP(item.price) }}</p>
+                      <p class="text-xs text-white/40">{{ item.duration }}</p>
+                    </div>
                   </button>
                 </div>
               </div>
             </template>
 
             <!-- Step 3: Fecha -->
-            <template
-              v-else-if="store.currentStep === 'Fecha'"
-            >
+            <template v-else-if="store.currentStep === 'Fecha'">
               <div
                 v-if="store.selectedService"
                 class="flex items-center justify-between px-4 py-3 rounded-xl border border-white/10 mb-6"
               >
-                <p
-                  class="text-sm font-semibold text-white"
-                >
-                  {{ store.selectedService.name }}
+                <p class="text-sm font-semibold text-white">
+                  {{ store.selectedService.name }} — {{ store.selectedService.duration }}
                 </p>
-
-                <p
-                  class="text-sm font-bold text-primary"
-                >
-                  {{ formatCOP(store.selectedService.price) }}
-                </p>
+                <p class="text-sm font-bold text-primary">{{ formatCOP(store.selectedService.price) }}</p>
               </div>
 
-              <p
-                class="text-xs tracking-wide text-white/40 mb-3"
-              >
-                ELIGE UN DÍA
-              </p>
-
-              <div class="grid grid-cols-7 gap-2 mb-6">
+              <p class="text-xs tracking-wide text-white/40 mb-3">ELIGE UN DÍA</p>
+              <div class="grid grid-cols-7 gap-2 mb-2">
                 <button
                   v-for="day in days"
                   :key="day.toISOString()"
                   type="button"
+                  :disabled="!isDayEnabled(day)"
                   class="flex flex-col items-center justify-center rounded-lg border py-2.5 transition"
                   :class="
-                    store.selectedDate &&
-                    isSameDay(store.selectedDate, day)
-                      ? 'bg-gradient-to-b from-[#b6903f] to-[#8f7130] border-transparent text-[#1a1408]'
-                      : 'border-white/10 text-white/70 hover:border-white/25'
+                    !isDayEnabled(day)
+                      ? 'border-white/5 text-white/20 cursor-not-allowed'
+                      : store.selectedDate && isSameDay(store.selectedDate, day)
+                        ? 'bg-gradient-to-b from-[#b6903f] to-[#8f7130] border-transparent text-[#1a1408]'
+                        : 'border-white/10 text-white/70 hover:border-white/25'
                   "
-                  @click="store.selectDate(day)"
+                  @click="isDayEnabled(day) && store.selectDate(day)"
                 >
-                  <span class="text-xs">
-                    {{ DAY_ABBREV[day.getDay()] }}
-                  </span>
-
-                  <span class="text-sm font-semibold">
-                    {{ day.getDate() }}
-                  </span>
+                  <span class="text-xs">{{ DAY_ABBREV[day.getDay()] }}</span>
+                  <span class="text-sm font-semibold">{{ day.getDate() }}</span>
                 </button>
               </div>
-
-              <p
-                class="text-xs tracking-wide text-white/40 mb-3"
-              >
-                HORARIOS DISPONIBLES
+              <p v-if="!isDayEnabled(days[0]!)" class="text-xs text-amber-400/80 mb-6">
+                {{ store.selectedBarbero?.name }} no está disponible hoy.
               </p>
+              <div v-else class="mb-6"></div>
 
-              <p
-                v-if="store.isLoadingBookedTimes"
-                class="text-sm text-white/30 py-4 text-center"
-              >
-                Cargando horarios...
-              </p>
-
-              <p
-                v-else-if="timeSlots.length === 0"
-                class="text-sm text-white/30 py-4 text-center"
-              >
+              <p class="text-xs tracking-wide text-white/40 mb-3">HORARIOS DISPONIBLES</p>
+              <p v-if="store.isLoadingBookedTimes" class="text-sm text-white/30 py-4 text-center">Cargando horarios...</p>
+              <p v-else-if="timeSlots.length === 0" class="text-sm text-white/30 py-4 text-center">
                 No quedan horarios disponibles para este día.
               </p>
-
-              <div
-                v-else
-                class="grid grid-cols-3 sm:grid-cols-6 gap-2"
-              >
+              <div v-else class="grid grid-cols-3 sm:grid-cols-6 gap-2">
                 <button
                   v-for="slot in timeSlots"
                   :key="slot"
@@ -843,86 +496,34 @@ async function handleCancelStored() {
             </template>
 
             <!-- Step 4: Datos -->
-            <template
-              v-else-if="store.currentStep === 'Datos'"
-            >
-              <div
-                class="border border-white/10 rounded-xl p-4 mb-6"
-              >
-                <p
-                  class="text-xs tracking-wide text-primary mb-3"
-                >
-                  RESUMEN
-                </p>
-
+            <template v-else-if="store.currentStep === 'Datos'">
+              <div class="border border-white/10 rounded-xl p-4 mb-6">
+                <p class="text-xs tracking-wide text-primary mb-3">RESUMEN</p>
                 <div class="grid grid-cols-2 gap-4">
                   <div>
-                    <p
-                      class="text-xs text-white/40 mb-0.5"
-                    >
-                      Barbero
-                    </p>
-
-                    <p
-                      class="text-sm font-semibold text-white"
-                    >
-                      {{ store.selectedBarbero?.name }}
-                    </p>
+                    <p class="text-xs text-white/40 mb-0.5">Barbero</p>
+                    <p class="text-sm font-semibold text-white">{{ store.selectedBarbero?.name }}</p>
                   </div>
-
                   <div>
-                    <p
-                      class="text-xs text-white/40 mb-0.5"
-                    >
-                      Servicio
-                    </p>
-
-                    <p
-                      class="text-sm font-semibold text-white"
-                    >
-                      {{ store.selectedService?.name }}
-                    </p>
+                    <p class="text-xs text-white/40 mb-0.5">Servicio</p>
+                    <p class="text-sm font-semibold text-white">{{ store.selectedService?.name }}</p>
                   </div>
-
                   <div>
-                    <p
-                      class="text-xs text-white/40 mb-0.5"
-                    >
-                      Fecha
-                    </p>
-
-                    <p
-                      class="text-sm font-semibold text-white"
-                    >
-                      {{ fechaLarga }}
-                    </p>
+                    <p class="text-xs text-white/40 mb-0.5">Fecha</p>
+                    <p class="text-sm font-semibold text-white">{{ fechaLarga }}</p>
                   </div>
-
                   <div>
-                    <p
-                      class="text-xs text-white/40 mb-0.5"
-                    >
-                      Hora
-                    </p>
-
-                    <p
-                      class="text-sm font-semibold text-white"
-                    >
-                      {{ store.selectedTime }}
-                    </p>
+                    <p class="text-xs text-white/40 mb-0.5">Hora</p>
+                    <p class="text-sm font-semibold text-white">{{ store.selectedTime }}</p>
                   </div>
                 </div>
               </div>
 
               <div class="space-y-4">
                 <div>
-                  <label
-                    class="block text-xs tracking-wide text-white/40 mb-2"
-                  >
-                    NOMBRE COMPLETO
-                    <span class="text-primary">*</span>
+                  <label class="block text-xs tracking-wide text-white/40 mb-2">
+                    NOMBRE COMPLETO <span class="text-primary">*</span>
                   </label>
-
                   <input
                     v-model="store.customer.name"
                     type="text"
@@ -930,15 +531,10 @@ async function handleCancelStored() {
                     class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50"
                   />
                 </div>
-
                 <div>
-                  <label
-                    class="block text-xs tracking-wide text-white/40 mb-2"
-                  >
-                    TELÉFONO / WHATSAPP
-                    <span class="text-primary">*</span>
+                  <label class="block text-xs tracking-wide text-white/40 mb-2">
+                    TELÉFONO / WHATSAPP <span class="text-primary">*</span>
                   </label>
-
                   <input
                     v-model="store.customer.phone"
                     type="tel"
@@ -946,14 +542,8 @@ async function handleCancelStored() {
                     class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50"
                   />
                 </div>
-
                 <div>
-                  <label
-                    class="block text-xs tracking-wide text-white/40 mb-2"
-                  >
-                    CORREO (OPCIONAL)
-                  </label>
-
+                  <label class="block text-xs tracking-wide text-white/40 mb-2">CORREO (OPCIONAL)</label>
                   <input
                     v-model="store.customer.email"
                     type="email"
@@ -961,14 +551,8 @@ async function handleCancelStored() {
                     class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50"
                   />
                 </div>
-
                 <div>
-                  <label
-                    class="block text-xs tracking-wide text-white/40 mb-2"
-                  >
-                    NOTAS (OPCIONAL)
-                  </label>
-
+                  <label class="block text-xs tracking-wide text-white/40 mb-2">NOTAS (OPCIONAL)</label>
                   <textarea
                     v-model="store.customer.notes"
                     rows="3"
@@ -980,39 +564,18 @@ async function handleCancelStored() {
             </template>
 
             <!-- Step 5: Productos -->
-            <template
-              v-else-if="store.currentStep === 'Productos'"
-            >
+            <template v-else-if="store.currentStep === 'Productos'">
               <div class="flex items-center gap-3 mb-4">
-                <span
-                  class="w-9 h-9 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shrink-0"
-                >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path
-                      d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"
-                    />
+                <span class="w-9 h-9 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shrink-0">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
                     <path d="M3 6h18" />
                     <path d="M16 10a4 4 0 0 1-8 0" />
                   </svg>
                 </span>
-
                 <div>
-                  <p
-                    class="text-sm font-semibold text-white"
-                  >
-                    Lleva algo para casa
-                  </p>
-
-                  <p class="text-xs text-white/40">
-                    Agrega productos para mantener tu estilo
-                  </p>
+                  <p class="text-sm font-semibold text-white">Lleva algo para casa</p>
+                  <p class="text-xs text-white/40">Agrega productos para mantener tu estilo</p>
                 </div>
               </div>
 
@@ -1030,194 +593,74 @@ async function handleCancelStored() {
                   @click="store.toggleProduct(product.id)"
                 >
                   <div class="flex items-center gap-3">
-                    <span
-                      class="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0"
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      >
-                        <path
-                          d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
-                        />
+                    <span class="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
                         <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                        <line
-                          x1="12"
-                          y1="22.08"
-                          x2="12"
-                          y2="12"
-                        />
+                        <line x1="12" y1="22.08" x2="12" y2="12" />
                       </svg>
                     </span>
-
                     <div>
-                      <p
-                        class="text-sm font-semibold text-white"
-                      >
-                        {{ product.name }}
-                      </p>
-
-                      <p class="text-xs text-white/40">
-                        {{ product.brand }}
-                      </p>
+                      <p class="text-sm font-semibold text-white">{{ product.name }}</p>
+                      <p class="text-xs text-white/40">{{ product.brand }}</p>
                     </div>
                   </div>
-
-                  <div
-                    class="flex items-center gap-3 shrink-0 ml-4"
-                  >
-                    <p
-                      class="text-sm font-bold text-primary"
-                    >
-                      {{ formatCOP(product.price) }}
-                    </p>
-
+                  <div class="flex items-center gap-3 shrink-0 ml-4">
+                    <p class="text-sm font-bold text-primary">{{ formatCOP(product.price) }}</p>
                     <span
                       class="w-7 h-7 rounded-md flex items-center justify-center border"
                       :class="
-                        store.selectedProductIds.has(
-                          product.id,
-                        )
+                        store.selectedProductIds.has(product.id)
                           ? 'bg-gradient-to-b from-[#b6903f] to-[#8f7130] border-transparent text-[#1a1408]'
                           : 'border-white/15 text-white/40'
                       "
                     >
-                      <svg
-                        v-if="
-                          store.selectedProductIds.has(
-                            product.id,
-                          )
-                        "
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="3"
-                      >
+                      <svg v-if="store.selectedProductIds.has(product.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
-
-                      <svg
-                        v-else
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      >
-                        <line
-                          x1="12"
-                          y1="5"
-                          x2="12"
-                          y2="19"
-                        />
-                        <line
-                          x1="5"
-                          y1="12"
-                          x2="19"
-                          y2="12"
-                        />
+                      <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
                       </svg>
                     </span>
                   </div>
                 </button>
               </div>
 
-              <div
-                class="border border-white/10 rounded-xl p-4"
-              >
-                <p
-                  class="text-xs tracking-wide text-white/40 mb-3"
-                >
-                  RESUMEN DEL PEDIDO
-                </p>
-
+              <div class="border border-white/10 rounded-xl p-4">
+                <p class="text-xs tracking-wide text-white/40 mb-3">RESUMEN DEL PEDIDO</p>
                 <div class="space-y-1.5 mb-3">
-                  <div
-                    v-if="store.selectedService"
-                    class="flex items-center justify-between text-sm"
-                  >
-                    <span class="text-white/70">
-                      {{ store.selectedService.name }}
-                    </span>
-
-                    <span class="text-white/90">
-                      {{ formatCOP(store.selectedService.price) }}
-                    </span>
+                  <div v-if="store.selectedService" class="flex items-center justify-between text-sm">
+                    <span class="text-white/70">{{ store.selectedService.name }}</span>
+                    <span class="text-white/90">{{ formatCOP(store.selectedService.price) }}</span>
                   </div>
-
-                  <div
-                    v-for="product in store.selectedProducts"
-                    :key="product.id"
-                    class="flex items-center justify-between text-sm"
-                  >
-                    <span class="text-white/70">
-                      {{ product.name }} x1
-                    </span>
-
-                    <span class="text-white/90">
-                      {{ formatCOP(product.price) }}
-                    </span>
+                  <div v-for="product in store.selectedProducts" :key="product.id" class="flex items-center justify-between text-sm">
+                    <span class="text-white/70">{{ product.name }} x1</span>
+                    <span class="text-white/90">{{ formatCOP(product.price) }}</span>
                   </div>
                 </div>
-
-                <div
-                  class="flex items-center justify-between pt-3 border-t border-white/10"
-                >
-                  <span
-                    class="text-sm font-bold text-white"
-                  >
-                    Total
-                  </span>
-
-                  <span
-                    class="text-lg font-bold text-primary"
-                  >
-                    {{ formatCOP(store.total) }}
-                  </span>
+                <div class="flex items-center justify-between pt-3 border-t border-white/10">
+                  <span class="text-sm font-bold text-white">Total</span>
+                  <span class="text-lg font-bold text-primary">{{ formatCOP(store.total) }}</span>
                 </div>
               </div>
             </template>
           </div>
 
           <!-- Footer -->
-          <div
-            v-if="!isSpecialScreen"
-            class="flex items-center justify-between px-6 py-4 border-t border-white/10 shrink-0"
-          >
+          <div v-if="!isSpecialScreen" class="flex items-center justify-between px-6 py-4 border-t border-white/10 shrink-0">
             <button
               v-if="store.currentStepIndex > 0"
               type="button"
               class="flex items-center gap-1 text-sm text-white/50 hover:text-white transition"
               @click="store.back"
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6" /></svg>
               Anterior
             </button>
-
             <span v-else></span>
 
-            <p
-              v-if="footerHint"
-              class="text-xs text-white/40"
-            >
-              {{ footerHint }}
-            </p>
+            <p v-if="footerHint" class="text-xs text-white/40">{{ footerHint }}</p>
 
             <button
               v-else-if="store.currentStep === 'Fecha'"
@@ -1227,17 +670,7 @@ async function handleCancelStored() {
               @click="store.next"
             >
               Continuar
-
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6" /></svg>
             </button>
 
             <button
@@ -1248,17 +681,7 @@ async function handleCancelStored() {
               @click="store.next"
             >
               Continuar
-
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6" /></svg>
             </button>
 
             <button
@@ -1268,23 +691,8 @@ async function handleCancelStored() {
               class="flex items-center gap-1.5 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] disabled:opacity-50 text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
               @click="store.confirmBooking"
             >
-              {{
-                store.isSubmitting
-                  ? 'Guardando...'
-                  : `Confirmar — ${formatCOP(store.total)}`
-              }}
-
-              <svg
-                v-if="!store.isSubmitting"
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="3"
-              >
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
+              {{ store.isSubmitting ? 'Guardando...' : `Confirmar — ${formatCOP(store.total)}` }}
+              <svg v-if="!store.isSubmitting" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12" /></svg>
             </button>
           </div>
         </div>

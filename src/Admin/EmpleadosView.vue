@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, reactive, ref } from 'vue'
-import { collection, doc, onSnapshot, orderBy, query, setDoc } from 'firebase/firestore'
+import { collection, deleteDoc, doc, onSnapshot, orderBy, query, setDoc, updateDoc } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { resolveEmail, useAuthStore } from '../stores/auth'
 import { createStaffAuthAccount, generateRandomPassword } from '../lib/createStaffAccount'
@@ -37,8 +37,36 @@ function initial(name: string) {
 function editEmpleado(empleado: Empleado) {
   console.log('Editar empleado:', empleado)
 }
-function deleteEmpleado(id: string) {
-  console.log('Eliminar empleado:', id)
+
+async function toggleActive(empleado: Empleado) {
+  try {
+    await updateDoc(doc(db, 'empleados', empleado.id), { active: !empleado.active })
+  } catch (err) {
+    console.error('No se pudo actualizar el estado del empleado', err)
+  }
+}
+
+const empleadoToDelete = ref<Empleado | null>(null)
+const isDeleting = ref(false)
+
+function askDelete(empleado: Empleado) {
+  empleadoToDelete.value = empleado
+}
+function cancelDelete() {
+  if (isDeleting.value) return
+  empleadoToDelete.value = null
+}
+async function confirmDelete() {
+  if (!empleadoToDelete.value) return
+  isDeleting.value = true
+  try {
+    await deleteDoc(doc(db, 'empleados', empleadoToDelete.value.id))
+    empleadoToDelete.value = null
+  } catch (err) {
+    console.error('No se pudo eliminar el empleado', err)
+  } finally {
+    isDeleting.value = false
+  }
 }
 
 // --- Modal: nuevo empleado -------------------------------------------------
@@ -107,7 +135,7 @@ async function submitNewEmployee() {
       name: form.name.trim(),
       email,
       phone: form.phone.trim(),
-      username: email.split('@')[0]!,
+      username: email.split('@')[0],
       role: 'empleado',
       active: true,
       createdAt: new Date().toISOString(),
@@ -185,7 +213,7 @@ async function submitNewEmployee() {
           </div>
         </div>
         <div v-if="authStore.isAdmin" class="flex items-center gap-2">
-          <ToggleSwitch v-model="empleado.active" />
+          <ToggleSwitch :model-value="empleado.active" @update:model-value="toggleActive(empleado)" />
           <button
             type="button"
             class="w-9 h-9 flex items-center justify-center rounded-lg border border-white/10 text-white/50 hover:text-white hover:border-white/20 transition"
@@ -201,7 +229,7 @@ async function submitNewEmployee() {
             type="button"
             class="w-9 h-9 flex items-center justify-center rounded-lg border border-white/10 text-white/50 hover:text-red-400 hover:border-red-400/30 transition"
             aria-label="Eliminar"
-            @click="deleteEmpleado(empleado.id)"
+            @click="askDelete(empleado)"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6" />
@@ -330,6 +358,50 @@ async function submitNewEmployee() {
               </button>
             </div>
           </form>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Modal: confirmar eliminación -->
+    <Teleport to="body">
+      <div v-if="empleadoToDelete" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
+        <div class="w-full max-w-sm bg-[#0e0e0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+          <div class="px-6 pt-6 pb-4 text-center">
+            <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+            </div>
+            <h2 class="font-serif text-lg font-bold text-white mb-1">¿Eliminar a este empleado?</h2>
+            <p class="text-sm text-white/50 mb-2">
+              <span class="text-white font-semibold">{{ empleadoToDelete.name }}</span> se eliminará de la lista y
+              dejará de aparecer como barbero en el sitio.
+            </p>
+            <p class="text-xs text-amber-400/80">
+              Esto no borra su cuenta de acceso (Firebase Authentication) — eso requiere hacerlo aparte desde la
+              consola de Firebase, o bien usa el interruptor para desactivarlo en vez de eliminarlo si solo quieres
+              que deje de estar activo.
+            </p>
+          </div>
+          <div class="flex items-center gap-3 px-6 pb-6 pt-2">
+            <button
+              type="button"
+              :disabled="isDeleting"
+              class="flex-1 text-sm font-semibold text-white/70 border border-white/10 rounded-lg py-2.5 hover:border-white/25 hover:text-white transition disabled:opacity-50"
+              @click="cancelDelete"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              :disabled="isDeleting"
+              class="flex-1 text-sm font-semibold text-white bg-red-600 hover:bg-red-500 rounded-lg py-2.5 transition disabled:opacity-50"
+              @click="confirmDelete"
+            >
+              {{ isDeleting ? 'Eliminando...' : 'Eliminar' }}
+            </button>
+          </div>
         </div>
       </div>
     </Teleport>
