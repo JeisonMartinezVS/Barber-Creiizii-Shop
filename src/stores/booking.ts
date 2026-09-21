@@ -119,6 +119,7 @@ function clearStoredBooking() {
 interface RawServiceItem {
   name?: string
   price?: string | number
+  duration?: string | number
   active?: boolean
 }
 interface RawService {
@@ -138,7 +139,7 @@ function parseServiceCategories(raw: RawService[] | undefined): ServiceCategory[
           id: `service-${serviceIndex}-item-${itemIndex}`,
           name: String(item.name || '').trim(),
           description: '',
-          duration: '30 min',
+          duration: item.duration ? String(item.duration) : '30 min',
           price: Number(String(item.price ?? '0').replace(/\D/g, '')) || 0,
         })),
     }))
@@ -182,8 +183,25 @@ export const useBookingStore = defineStore('booking', () => {
   (err) => console.error('No se pudieron cargar los empleados', err),
   )
 
+  // Los precios ahora son UNOS SOLOS para todos los barberos — los pone el
+  // admin en config.services (ya no viven en empleados/{uid}). Se cargan
+  // una sola vez, en vivo, igual que barberos y productos.
   const serviceCategories = ref<ServiceCategory[]>([])
-  const isLoadingServices = ref(false)
+  const isLoadingServices = ref(true)
+  onSnapshot(
+    collection(db, 'config'),
+    (snapshot) => {
+      const configDoc = snapshot.docs[0]
+      const data = configDoc ? (configDoc.data() as { services?: RawService[] }) : undefined
+      serviceCategories.value = parseServiceCategories(data?.services)
+      isLoadingServices.value = false
+    },
+    (err) => {
+      console.error('No se pudieron cargar los servicios', err)
+      serviceCategories.value = []
+      isLoadingServices.value = false
+    },
+  )
 
   const products = ref<Product[]>([])
   onSnapshot(
@@ -246,27 +264,18 @@ export const useBookingStore = defineStore('booking', () => {
     () => customer.name.trim().length > 0 && customer.phone.trim().length > 0,
   )
 
-  // Cada barbero tiene SU PROPIO horario y lista de servicios/precios,
-  // guardados en empleados/{barberoId} — se recargan cada vez que se elige
-  // un barbero distinto en el wizard.
+  // El horario SÍ sigue siendo propio de cada barbero — esto no cambió.
   const selectedBarberoSchedule = ref<DaySchedule[]>(defaultSchedule())
 
-  async function fetchServicesForBarbero(barberoId: string) {
-    isLoadingServices.value = true
+  async function fetchScheduleForBarbero(barberoId: string) {
     try {
       const snap = await getDoc(doc(db, 'empleados', barberoId))
-      const data = snap.exists()
-        ? (snap.data() as { services?: RawService[]; schedule?: DaySchedule[] })
-        : undefined
-      serviceCategories.value = parseServiceCategories(data?.services)
+      const data = snap.exists() ? (snap.data() as { schedule?: DaySchedule[] }) : undefined
       selectedBarberoSchedule.value =
         Array.isArray(data?.schedule) && data.schedule.length === 7 ? data.schedule : defaultSchedule()
     } catch (err) {
-      console.error('No se pudieron cargar los servicios del barbero', err)
-      serviceCategories.value = []
+      console.error('No se pudo cargar el horario del barbero', err)
       selectedBarberoSchedule.value = defaultSchedule()
-    } finally {
-      isLoadingServices.value = false
     }
   }
 
@@ -344,7 +353,6 @@ export const useBookingStore = defineStore('booking', () => {
     selectedDate.value = null
     selectedTime.value = null
     selectedProductIds.value = new Set()
-    serviceCategories.value = []
     selectedBarberoSchedule.value = defaultSchedule()
     bookedTimes.value = []
     customer.name = ''
@@ -365,8 +373,7 @@ export const useBookingStore = defineStore('booking', () => {
 
   function selectBarbero(id: string) {
     selectedBarberoId.value = id
-    selectedServiceId.value = null // el precio depende del barbero — no arrastrar el servicio del anterior
-    fetchServicesForBarbero(id)
+    fetchScheduleForBarbero(id)
     if (selectedDate.value) fetchBookedTimes()
     next()
   }
@@ -530,7 +537,7 @@ export const useBookingStore = defineStore('booking', () => {
     close,
     startNewBooking,
     refreshStoredBooking,
-    fetchServicesForBarbero,
+    fetchScheduleForBarbero,
     goToStep,
     next,
     back,

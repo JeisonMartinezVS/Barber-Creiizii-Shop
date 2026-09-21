@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { formatCOP, STEPS, useBookingStore } from '../stores/booking'
+import { formatCOP, formatLocalDate, STEPS, useBookingStore } from '../stores/booking'
 
 const store = useBookingStore()
 
@@ -36,6 +36,26 @@ function isSameDay(a: Date, b: Date) {
 function isDayEnabled(day: Date): boolean {
   const daySchedule = store.selectedBarberoSchedule[day.getDay()]
   return daySchedule ? daySchedule.enabled : true
+}
+
+// "Elegir otra fecha" — para cuando el cliente necesita un día más allá de
+// los 14 que se ven en la rejilla rápida.
+const showCustomDatePicker = ref(false)
+const customDateInput = ref('')
+const customDateError = ref('')
+
+const minCustomDate = computed(() => formatLocalDate(new Date()))
+
+function handleCustomDateChange() {
+  customDateError.value = ''
+  if (!customDateInput.value) return
+  const [y, m, d] = customDateInput.value.split('-').map(Number)
+  const picked = new Date(y!, m! - 1, d!)
+  if (!isDayEnabled(picked)) {
+    customDateError.value = `${store.selectedBarbero?.name ?? 'El barbero'} no trabaja ese día. Elige otro.`
+    return
+  }
+  store.selectDate(picked)
 }
 
 // Appointments need at least this much lead time — also means "10:00" never
@@ -396,10 +416,10 @@ async function handleCancelStored() {
               </div>
 
               <p v-if="store.isLoadingServices" class="text-sm text-white/30 text-center py-10">
-                Cargando servicios de {{ store.selectedBarbero?.name }}...
+                Cargando servicios...
               </p>
               <p v-else-if="store.serviceCategories.length === 0" class="text-sm text-white/30 text-center py-10">
-                {{ store.selectedBarbero?.name }} todavía no tiene servicios configurados.
+                Todavía no hay servicios configurados.
               </p>
 
               <div v-for="category in store.serviceCategories" :key="category.id" class="mb-6 last:mb-0">
@@ -467,10 +487,45 @@ async function handleCancelStored() {
                   <span class="text-sm font-semibold">{{ day.getDate() }}</span>
                 </button>
               </div>
-              <p v-if="!isDayEnabled(days[0]!)" class="text-xs text-amber-400/80 mb-6">
+              <p v-if="!isDayEnabled(days[0]!)" class="text-xs text-amber-400/80 mb-3">
                 {{ store.selectedBarbero?.name }} no está disponible hoy.
               </p>
-              <div v-else class="mb-6"></div>
+
+              <div class="mb-6">
+                <button
+                  v-if="!showCustomDatePicker"
+                  type="button"
+                  class="text-xs font-semibold text-primary hover:underline"
+                  @click="showCustomDatePicker = true"
+                >
+                  ¿Necesitas una fecha más adelante? Elegir otro día
+                </button>
+
+                <div v-else class="flex items-center gap-2 flex-wrap">
+                  <input
+                    v-model="customDateInput"
+                    type="date"
+                    :min="minCustomDate"
+                    class="bg-[#151515] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-primary/50"
+                    @change="handleCustomDateChange"
+                  />
+                  <button
+                    type="button"
+                    class="text-xs text-white/40 hover:text-white/70 transition"
+                    @click="showCustomDatePicker = false"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+
+                <p v-if="customDateError" class="text-xs text-red-400 mt-2">{{ customDateError }}</p>
+                <p
+                  v-else-if="store.selectedDate && !days.some((d) => isSameDay(d, store.selectedDate!))"
+                  class="text-xs text-white/50 mt-2"
+                >
+                  Fecha elegida: <span class="text-primary font-semibold">{{ fechaLarga }}</span>
+                </p>
+              </div>
 
               <p class="text-xs tracking-wide text-white/40 mb-3">HORARIOS DISPONIBLES</p>
               <p v-if="store.isLoadingBookedTimes" class="text-sm text-white/30 py-4 text-center">Cargando horarios...</p>

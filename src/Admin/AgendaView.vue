@@ -60,6 +60,14 @@ const WEEKDAY_ABBR = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
 const WEEKDAY_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const MONTH_ABBR = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic']
 
+// La Agenda es "de hoy en adelante" — lo de fechas pasadas vive en Reportes.
+const todayStr = formatLocalDate(new Date())
+const todayStartOfDay = (() => {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  return d
+})()
+
 const citas = ref<Cita[]>([])
 let unsubscribe: (() => void) | null = null
 
@@ -67,11 +75,13 @@ onMounted(() => {
   // Un empleado SOLO puede recibir de vuelta sus propias citas — esto no es
   // solo una comodidad visual, las reglas de Firestore exigen este mismo
   // filtro para no-admins (una consulta sin él sería rechazada por permisos).
+  // El where('dateTime', '>=', hoy) es lo que deja fuera lo de días pasados.
   const q = authStore.isAdmin
-    ? query(collection(db, 'citas'), orderBy('dateTime', 'asc'))
+    ? query(collection(db, 'citas'), where('dateTime', '>=', todayStartOfDay), orderBy('dateTime', 'asc'))
     : query(
         collection(db, 'citas'),
         where('barberoId', '==', authStore.user?.uid ?? '__none__'),
+        where('dateTime', '>=', todayStartOfDay),
         orderBy('dateTime', 'asc'),
       )
   unsubscribe = onSnapshot(q, (snapshot) => {
@@ -129,7 +139,7 @@ const groupedCitas = computed<CitaGroup[]>(() => {
 
 // --- Stats --------------------------------------------------------------
 function isToday(dateStr: string) {
-  return dateStr === formatLocalDate(new Date())
+  return dateStr === todayStr
 }
 function isThisMonth(dateStr: string) {
   const today = new Date()
@@ -265,6 +275,7 @@ function refresh() {
           <input
             v-model="selectedDate"
             type="date"
+            :min="todayStr"
             class="flex-1 sm:flex-none bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-[#c9a24b]/50"
           />
         </div>
