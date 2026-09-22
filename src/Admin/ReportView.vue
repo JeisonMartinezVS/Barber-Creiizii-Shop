@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore'
+import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { useAuthStore } from '../stores/auth'
 import { formatLocalDate, useBookingStore } from '../stores/booking'
@@ -15,7 +15,7 @@ interface Cita {
   id: string
   barberoId: string
   total: number
-  date: string // "YYYY-MM-DD"
+  date: string // "YYYY-MM-DD" — derivado de dateTime, no del campo string guardado
   status: CitaStatus
 }
 
@@ -35,19 +35,26 @@ function subscribe() {
   unsubscribe?.()
   isLoading.value = true
   const base = collection(db, 'citas')
+  // Sin orderBy a propósito: para sumar/contar no hace falta que vengan
+  // ordenadas, y así esta consulta nunca necesita un índice compuesto (el
+  // que antes exigía barberoId + date era justo lo que fallaba en
+  // silencio y dejaba los números de "Todo el equipo" pegados).
   const q =
-    scope.value === 'todos'
-      ? query(base, orderBy('date', 'desc'))
-      : query(base, where('barberoId', '==', scope.value), orderBy('date', 'desc'))
+    scope.value === 'todos' ? query(base) : query(base, where('barberoId', '==', scope.value))
 
   unsubscribe = onSnapshot(
     q,
     (snapshot) => {
-      citas.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Cita)
+      citas.value = snapshot.docs.map((d) => {
+        const data = d.data() as { barberoId: string; total: number; status: CitaStatus; dateTime?: { toDate: () => Date }; date?: string }
+        const date = data.dateTime ? formatLocalDate(data.dateTime.toDate()) : (data.date ?? '')
+        return { id: d.id, barberoId: data.barberoId, total: data.total, status: data.status, date }
+      })
       isLoading.value = false
     },
     (err) => {
       console.error('No se pudieron cargar los reportes', err)
+      citas.value = [] // antes se quedaban los datos del scope anterior — ahora sí se limpian
       isLoading.value = false
     },
   )

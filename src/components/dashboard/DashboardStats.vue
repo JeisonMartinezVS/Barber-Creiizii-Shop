@@ -1,35 +1,46 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore'
+import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore'
 import { db } from '../../config/firebase'
+import { useAuthStore } from '../../stores/auth'
 import { formatLocalDate } from '../../stores/booking'
 import StatCard from '../../components/dashboard/StatCard.vue'
+
+const authStore = useAuthStore()
 
 type CitaStatus = 'pendiente' | 'confirmada' | 'completada' | 'cancelada' | 'no_asistio'
 
 interface Cita {
   id: string
   barberoId: string
-  barberoName: string
-  serviceName: string
-  products: Array<{ id: string; name: string; price: number }>
   total: number
   date: string // "YYYY-MM-DD"
-  time: string
-  dateTime: { toDate: () => Date }
-  customerName: string
-  customerPhone: string
-  customerNotes: string
   status: CitaStatus
 }
 const citas = ref<Cita[]>([])
 let unsubscribe: (() => void) | null = null
 
 onMounted(() => {
-  const q = query(collection(db, 'citas'), orderBy('dateTime', 'asc'))
-  unsubscribe = onSnapshot(q, (snapshot) => {
-    citas.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Cita)
-  })
+  // Igual que en Agenda: un empleado solo debe recibir SUS propias citas —
+  // esto también lo exigen las reglas de Firestore, no es solo visual.
+  const q = authStore.isAdmin
+    ? query(collection(db, 'citas'), orderBy('dateTime', 'asc'))
+    : query(
+        collection(db, 'citas'),
+        where('barberoId', '==', authStore.user?.uid ?? '__none__'),
+        orderBy('dateTime', 'asc'),
+      )
+
+  unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      citas.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Cita)
+    },
+    (err) => {
+      console.error('No se pudieron cargar las estadísticas', err)
+      citas.value = []
+    },
+  )
 })
 onUnmounted(() => unsubscribe?.())
 
