@@ -21,15 +21,13 @@ const citas = ref<Cita[]>([])
 let unsubscribe: (() => void) | null = null
 
 onMounted(() => {
-  // Igual que en Agenda: un empleado solo debe recibir SUS propias citas —
-  // esto también lo exigen las reglas de Firestore, no es solo visual.
-  const q = authStore.isAdmin
-    ? query(collection(db, 'citas'), orderBy('dateTime', 'asc'))
-    : query(
-        collection(db, 'citas'),
-        where('barberoId', '==', authStore.user?.uid ?? '__none__'),
-        orderBy('dateTime', 'asc'),
-      )
+  // Siempre "lo mío" — sin importar si es admin o empleado. Para ver el
+  // conjunto de todo el equipo está Reportes (con su propio selector).
+  const q = query(
+    collection(db, 'citas'),
+    where('barberoId', '==', authStore.user?.uid ?? '__none__'),
+    orderBy('dateTime', 'asc'),
+  )
 
   unsubscribe = onSnapshot(
     q,

@@ -4,7 +4,7 @@ import { collection, deleteDoc, doc, onSnapshot, orderBy, query, setDoc, updateD
 import { db } from '../config/firebase'
 import { useAuthStore } from '../stores/auth'
 import { formatLocalDate, getSlotId, useBookingStore } from '../stores/booking'
-import StatCard from '../components/dashboard/StatCard.vue'
+import DashboardStats from '../components/dashboard/DashboardStats.vue'
 
 const authStore = useAuthStore()
 const bookingStore = useBookingStore() // reuses its live `barberos` list for the filter dropdown
@@ -243,17 +243,7 @@ function refresh() {
 
 <template>
   <div>
-    <!-- Stat cards -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-      <StatCard
-        v-for="stat in stats"
-        :key="stat.label"
-        :label="stat.label"
-        :value="stat.value"
-        :icon="stat.icon"
-        :accent="stat.accent"
-      />
-    </div>
+    <DashboardStats />
 
     <!-- Toolbar -->
     <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
