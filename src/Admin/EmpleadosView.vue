@@ -157,7 +157,7 @@ async function submitNewEmployee() {
 
     } else {
 // 1. Crea la cuenta de Auth SIN afectar tu propia sesión de admin.
-    const uid = await createStaffAuthAccount(email, password)
+    const { uid, tempPasswordSetAt } = await createStaffAuthAccount(email, password)
 
       await setDoc(doc(db, 'empleados', uid), {
       name: form.name.trim(),
@@ -166,6 +166,8 @@ async function submitNewEmployee() {
       username: email.split('@')[0],
       role: 'empleado',
       active: true,
+      mustChangePassword: true, // obliga a cambiar la contraseña temporal en el primer ingreso
+      tempPasswordSetAt, // passwordUpdatedAt de la contraseña temporal, para detectar cuándo la cambia
       createdAt: new Date().toISOString(),
     })
 

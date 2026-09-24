@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import ChangePasswordModal from '../components/dashboard/ChangePasswordModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -88,7 +89,7 @@ async function handleLogout() {
       <div class="flex items-center justify-between px-4 py-3">
         <div class="flex items-center gap-2">
           <img src="../../public/icon.png" alt="Creiizii" class="w-8 h-8">
-          <span class="text-white font-serif font-bold text-base">Bienvenido, {{ authStore.user?.displayName || authStore.user?.email }}</span>
+          <span class="text-white font-serif font-bold text-base">Bienvenido, {{ authStore.name || authStore.user?.displayName || authStore.user?.email }}</span>
         </div>
         <button
           type="button"
@@ -182,5 +183,8 @@ async function handleLogout() {
     <main class="flex-1 min-w-0 p-4 md:p-6">
       <router-view />
     </main>
+
+    <!-- Primer ingreso de un empleado: obliga a cambiar la contraseña temporal -->
+    <ChangePasswordModal v-if="authStore.mustChangePassword" />
   </div>
 </template>

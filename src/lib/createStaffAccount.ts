@@ -1,5 +1,6 @@
 import { deleteApp, getApp, initializeApp } from 'firebase/app'
 import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth'
+import { fetchAuthAccountTimestamps } from './authAccountInfo'
 
 /**
  * Creates a Firebase Auth account WITHOUT signing in as that account in the
@@ -14,15 +15,29 @@ import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth'
  *
  * No Cloud Function, no Admin SDK, no deploy — this runs entirely in the
  * browser with the Firebase config you already have.
+ *
+ * También devuelve `tempPasswordSetAt`: el passwordUpdatedAt exacto que
+ * Firebase le asignó a la contraseña temporal. Si más adelante la cuenta
+ * tiene otro valor, el empleado ya la cambió (ver stores/auth.ts). Es null si
+ * no se pudo leer; la cuenta se crea igual.
  */
-export async function createStaffAuthAccount(email: string, password: string): Promise<string> {
+export async function createStaffAuthAccount(
+  email: string,
+  password: string,
+): Promise<{ uid: string; tempPasswordSetAt: number | null }> {
   const primaryConfig = getApp().options // reuses whatever config your app already initialized with
   const secondaryApp = initializeApp(primaryConfig, `staff-creation-${Date.now()}`)
   const secondaryAuth = getAuth(secondaryApp)
   try {
     const credential = await createUserWithEmailAndPassword(secondaryAuth, email, password)
+    let tempPasswordSetAt: number | null = null
+    try {
+      tempPasswordSetAt = (await fetchAuthAccountTimestamps(credential.user, primaryConfig.apiKey!)).passwordUpdatedAt
+    } catch (err) {
+      console.error('No se pudo leer la marca de la contraseña temporal', err)
+    }
     await signOut(secondaryAuth)
-    return credential.user.uid
+    return { uid: credential.user.uid, tempPasswordSetAt }
   } finally {
     await deleteApp(secondaryApp)
   }
