@@ -106,12 +106,72 @@ const monthLabel = computed(() => {
   return label.charAt(0).toUpperCase() + label.slice(1)
 })
 
+// Filtro opcional por día: "YYYY-MM-DD" o '' (= todo el mes).
+const selectedDay = ref('')
+
+// Mes y día se mantienen coherentes: elegir un día mueve el mes a ese día,
+// y cambiar a un mes que no contiene el día elegido lo limpia.
+watch(selectedDay, (day) => {
+  if (day && !day.startsWith(selectedMonth.value)) selectedMonth.value = day.slice(0, 7)
+})
+watch(selectedMonth, (month) => {
+  if (selectedDay.value && !selectedDay.value.startsWith(month)) selectedDay.value = ''
+})
+
+const monthBounds = computed(() => {
+  const [y, m] = selectedMonth.value.split('-').map(Number)
+  const lastDay = new Date(y!, m!, 0).getDate()
+  return { min: `${selectedMonth.value}-01`, max: `${selectedMonth.value}-${String(lastDay).padStart(2, '0')}` }
+})
+
+const tableLabel = computed(() => {
+  if (!selectedDay.value) return monthLabel.value
+  const [y, m, d] = selectedDay.value.split('-').map(Number)
+  return new Date(y!, m! - 1, d!).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })
+})
+
 const monthCitas = computed(() =>
   citas.value
-    .filter((c) => c.date.startsWith(selectedMonth.value))
+    .filter((c) => (selectedDay.value ? c.date === selectedDay.value : c.date.startsWith(selectedMonth.value)))
     .slice()
     .sort((a, b) => (a.date === b.date ? a.time.localeCompare(b.time) : a.date.localeCompare(b.date))),
 )
+
+// --- Paginación de la tabla ------------------------------------------------
+const PAGE_SIZE = 10
+const currentPage = ref(1)
+const totalPages = computed(() => Math.max(1, Math.ceil(monthCitas.value.length / PAGE_SIZE)))
+const pagedCitas = computed(() =>
+  monthCitas.value.slice((currentPage.value - 1) * PAGE_SIZE, currentPage.value * PAGE_SIZE),
+)
+const pageStart = computed(() => (monthCitas.value.length === 0 ? 0 : (currentPage.value - 1) * PAGE_SIZE + 1))
+const pageEnd = computed(() => Math.min(currentPage.value * PAGE_SIZE, monthCitas.value.length))
+
+// Números de página a mostrar, con '…' cuando hay muchas: 1 … 4 5 6 … 12
+const pageNumbers = computed<Array<number | '…'>>(() => {
+  const total = totalPages.value
+  const current = currentPage.value
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages: Array<number | '…'> = [1]
+  const from = Math.max(2, current - 1)
+  const to = Math.min(total - 1, current + 1)
+  if (from > 2) pages.push('…')
+  for (let p = from; p <= to; p++) pages.push(p)
+  if (to < total - 1) pages.push('…')
+  pages.push(total)
+  return pages
+})
+
+function goToPage(page: number) {
+  currentPage.value = Math.min(Math.max(1, page), totalPages.value)
+}
+
+// Al cambiar filtros o barbero se vuelve a la primera página; si llegan
+// datos nuevos y la página actual deja de existir, se ajusta a la última.
+watch([selectedMonth, selectedDay, scope], () => (currentPage.value = 1))
+watch(totalPages, (total) => {
+  if (currentPage.value > total) currentPage.value = total
+})
 
 function barberoName(id: string) {
   return bookingStore.barberos.find((b) => b.id === id)?.name ?? '—'
@@ -286,17 +346,37 @@ const statusBreakdown = computed(() => {
       <div class="bg-[#0e0e0e] border border-white/10 rounded-xl p-5 mt-4">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
           <p class="text-sm font-semibold text-white">
-            Citas de {{ monthLabel }} <span class="text-white/40 font-normal">({{ monthCitas.length }})</span>
+            Citas {{ selectedDay ? 'del' : 'de' }} {{ tableLabel }}
+            <span class="text-white/40 font-normal">({{ monthCitas.length }})</span>
           </p>
-          <input
-            v-model="selectedMonth"
-            type="month"
-            class="bg-[#161616] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-[#c9a24b]/50"
-          />
+          <div class="flex flex-wrap items-center gap-2">
+            <input
+              v-model="selectedMonth"
+              type="month"
+              title="Filtrar por mes"
+              class="bg-[#161616] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-[#c9a24b]/50"
+            />
+            <input
+              v-model="selectedDay"
+              type="date"
+              title="Filtrar por día"
+              :min="monthBounds.min"
+              :max="monthBounds.max"
+              class="bg-[#161616] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-[#c9a24b]/50"
+            />
+            <button
+              v-if="selectedDay"
+              type="button"
+              class="px-3 py-2 text-xs rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/30 transition-colors"
+              @click="selectedDay = ''"
+            >
+              Ver todo el mes
+            </button>
+          </div>
         </div>
 
         <p v-if="monthCitas.length === 0" class="text-sm text-white/30 text-center py-8">
-          No hay citas registradas en este mes.
+          {{ selectedDay ? 'No hay citas registradas en este día.' : 'No hay citas registradas en este mes.' }}
         </p>
 
         <div v-else class="overflow-x-auto -mx-5 px-5">
@@ -313,7 +393,7 @@ const statusBreakdown = computed(() => {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="cita in monthCitas" :key="cita.id" class="border-b border-white/5 last:border-0">
+              <tr v-for="cita in pagedCitas" :key="cita.id" class="border-b border-white/5 last:border-0">
                 <td class="py-2.5 pr-4 text-white/70">{{ formatTableDate(cita.date) }}</td>
                 <td class="py-2.5 pr-4 text-white/70">{{ cita.time || '—' }}</td>
                 <td v-if="scope === 'todos'" class="py-2.5 pr-4 text-white/70">{{ barberoName(cita.barberoId) }}</td>
@@ -331,6 +411,50 @@ const statusBreakdown = computed(() => {
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Paginador -->
+        <div
+          v-if="monthCitas.length > PAGE_SIZE"
+          class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mt-4 pt-4 border-t border-white/10"
+        >
+          <p class="text-xs text-white/40">
+            Mostrando {{ pageStart }}–{{ pageEnd }} de {{ monthCitas.length }}
+          </p>
+          <div class="flex items-center gap-1">
+            <button
+              type="button"
+              class="px-2.5 py-1.5 text-xs rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/30 transition-colors disabled:opacity-30 disabled:pointer-events-none"
+              :disabled="currentPage === 1"
+              @click="goToPage(currentPage - 1)"
+            >
+              Anterior
+            </button>
+            <template v-for="(page, i) in pageNumbers" :key="`${page}-${i}`">
+              <span v-if="page === '…'" class="px-1.5 text-xs text-white/30">…</span>
+              <button
+                v-else
+                type="button"
+                class="min-w-8 px-2 py-1.5 text-xs rounded-lg border transition-colors"
+                :class="
+                  page === currentPage
+                    ? 'border-[#c9a24b]/60 bg-[#c9a24b]/15 text-[#c9a24b] font-semibold'
+                    : 'border-white/10 text-white/60 hover:text-white hover:border-white/30'
+                "
+                @click="goToPage(page)"
+              >
+                {{ page }}
+              </button>
+            </template>
+            <button
+              type="button"
+              class="px-2.5 py-1.5 text-xs rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/30 transition-colors disabled:opacity-30 disabled:pointer-events-none"
+              :disabled="currentPage === totalPages"
+              @click="goToPage(currentPage + 1)"
+            >
+              Siguiente
+            </button>
+          </div>
         </div>
       </div>
     </template>
