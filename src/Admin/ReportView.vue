@@ -16,7 +16,10 @@ interface Cita {
   barberoId: string
   total: number
   date: string // "YYYY-MM-DD" — derivado de dateTime, no del campo string guardado
+  time: string
   status: CitaStatus
+  customerName: string
+  serviceName: string
 }
 
 // 'todos' solo existe para el admin — un empleado siempre ve lo suyo.
@@ -46,9 +49,28 @@ function subscribe() {
     q,
     (snapshot) => {
       citas.value = snapshot.docs.map((d) => {
-        const data = d.data() as { barberoId: string; total: number; status: CitaStatus; dateTime?: { toDate: () => Date }; date?: string }
+        const data = d.data() as {
+          barberoId: string
+          total: number
+          status: CitaStatus
+          dateTime?: { toDate: () => Date }
+          date?: string
+          time?: string
+          customerName?: string
+          serviceName?: string
+        }
         const date = data.dateTime ? formatLocalDate(data.dateTime.toDate()) : (data.date ?? '')
-        return { id: d.id, barberoId: data.barberoId, total: data.total, status: data.status, date }
+        const time = data.time ?? (data.dateTime ? data.dateTime.toDate().toTimeString().slice(0, 5) : '')
+        return {
+          id: d.id,
+          barberoId: data.barberoId,
+          total: data.total,
+          status: data.status,
+          date,
+          time,
+          customerName: data.customerName ?? '',
+          serviceName: data.serviceName ?? '',
+        }
       })
       isLoading.value = false
     },
@@ -72,6 +94,33 @@ function isSameMonth(dateStr: string) {
 }
 
 const thisMonthCitas = computed(() => citas.value.filter((c) => isSameMonth(c.date)))
+
+// --- Tabla de citas por mes (con filtro) -----------------------------------
+// Valor del <input type="month">: "YYYY-MM". Arranca en el mes actual.
+const selectedMonth = ref(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
+
+const monthLabel = computed(() => {
+  const [y, m] = selectedMonth.value.split('-').map(Number)
+  const d = new Date(y!, m! - 1, 1)
+  const label = d.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
+  return label.charAt(0).toUpperCase() + label.slice(1)
+})
+
+const monthCitas = computed(() =>
+  citas.value
+    .filter((c) => c.date.startsWith(selectedMonth.value))
+    .slice()
+    .sort((a, b) => (a.date === b.date ? a.time.localeCompare(b.time) : a.date.localeCompare(b.date))),
+)
+
+function barberoName(id: string) {
+  return bookingStore.barberos.find((b) => b.id === id)?.name ?? '—'
+}
+
+function formatTableDate(dateStr: string) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y!, m! - 1, d!).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })
+}
 const nonCancelled = computed(() => citas.value.filter((c) => c.status !== 'cancelada'))
 
 const totalReservasMes = computed(() => thisMonthCitas.value.length)
@@ -230,6 +279,58 @@ const statusBreakdown = computed(() => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Tabla de citas del mes -->
+      <div class="bg-[#0e0e0e] border border-white/10 rounded-xl p-5 mt-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+          <p class="text-sm font-semibold text-white">
+            Citas de {{ monthLabel }} <span class="text-white/40 font-normal">({{ monthCitas.length }})</span>
+          </p>
+          <input
+            v-model="selectedMonth"
+            type="month"
+            class="bg-[#161616] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-[#c9a24b]/50"
+          />
+        </div>
+
+        <p v-if="monthCitas.length === 0" class="text-sm text-white/30 text-center py-8">
+          No hay citas registradas en este mes.
+        </p>
+
+        <div v-else class="overflow-x-auto -mx-5 px-5">
+          <table class="w-full text-sm min-w-[640px]">
+            <thead>
+              <tr class="text-left text-xs text-white/40 border-b border-white/10">
+                <th class="py-2 pr-4 font-medium">Fecha</th>
+                <th class="py-2 pr-4 font-medium">Hora</th>
+                <th v-if="scope === 'todos'" class="py-2 pr-4 font-medium">Barbero</th>
+                <th class="py-2 pr-4 font-medium">Cliente</th>
+                <th class="py-2 pr-4 font-medium">Servicio</th>
+                <th class="py-2 pr-4 font-medium">Estado</th>
+                <th class="py-2 pl-4 font-medium text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="cita in monthCitas" :key="cita.id" class="border-b border-white/5 last:border-0">
+                <td class="py-2.5 pr-4 text-white/70">{{ formatTableDate(cita.date) }}</td>
+                <td class="py-2.5 pr-4 text-white/70">{{ cita.time || '—' }}</td>
+                <td v-if="scope === 'todos'" class="py-2.5 pr-4 text-white/70">{{ barberoName(cita.barberoId) }}</td>
+                <td class="py-2.5 pr-4 text-white/70">{{ cita.customerName || '—' }}</td>
+                <td class="py-2.5 pr-4 text-white/50">{{ cita.serviceName || '—' }}</td>
+                <td class="py-2.5 pr-4">
+                  <span
+                    class="px-2 py-0.5 rounded-full text-[11px] font-medium"
+                    :style="{ backgroundColor: `${STATUS_COLORS[cita.status]}20`, color: STATUS_COLORS[cita.status] }"
+                  >
+                    {{ STATUS_LABELS[cita.status] }}
+                  </span>
+                </td>
+                <td class="py-2.5 pl-4 text-right text-white/80 font-medium">${{ cita.total.toLocaleString('es-CO') }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </template>
