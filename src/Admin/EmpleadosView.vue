@@ -18,7 +18,7 @@ interface Empleado {
 }
 
 const authStore = useAuthStore()
-
+const editingId = ref<string | null>(null)
 const empleados = ref<Empleado[]>([])
 let unsubscribe: (() => void) | null = null
 
@@ -36,6 +36,11 @@ function initial(name: string) {
 
 function editEmpleado(empleado: Empleado) {
   console.log('Editar empleado:', empleado)
+  form.name = empleado.name
+  form.phone = empleado.phone
+  editingId.value = empleado.id
+  console.log('editingId:', editingId.value)
+  isModalOpen.value = true
 }
 
 async function toggleActive(empleado: Empleado) {
@@ -84,6 +89,7 @@ const form = reactive({
 const createdEmployee = ref<{ name: string; username: string; phone: string; password: string } | null>(null)
 
 function openModal() {
+  editingId.value = null
   form.name = ''
   form.email = ''
   form.phone = ''
@@ -108,15 +114,22 @@ function whatsappUrl(phone: string, name: string, username: string, password: st
 
 async function submitNewEmployee() {
   formError.value = ''
-
-  if (!form.name.trim() || !form.email.trim() || !form.phone.trim()) {
+  if (editingId.value) {
+    if (!form.name.trim() || !form.phone.trim()) {
+    formError.value = 'Nombre y celular son obligatorios.'
+    return
+  }
+  } else {
+    if (!form.name.trim() || !form.email.trim() || !form.phone.trim()) {
     formError.value = 'Nombre, correo/usuario y celular son obligatorios.'
     return
   }
+  }
+
 
   const email = resolveEmail(form.email)
   const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-  if (!isValidEmail) {
+  if (!isValidEmail && !editingId.value) {
     formError.value = `"${email}" no es un correo válido. Revisa que no tenga espacios y que VITE_ADMIN_EMAIL_DOMAIN esté configurado (revisa tu .env).`
     return
   }
@@ -125,13 +138,22 @@ async function submitNewEmployee() {
 
   isSubmitting.value = true
   try {
-    // 1. Crea la cuenta de Auth SIN afectar tu propia sesión de admin.
-    const uid = await createStaffAuthAccount(email, password)
+
 
     // 2. Guarda su ficha en Firestore. Firestore rules exige que quien
     //    escribe aquí ya sea admin — nunca desde este flujo directamente,
     //    la regla revisa el documento de QUIEN está logueado ahora (tú).
-    await setDoc(doc(db, 'empleados', uid), {
+    if (editingId.value){
+      await updateDoc(doc(db, 'empleados', editingId.value), {
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+      })
+
+    } else {
+// 1. Crea la cuenta de Auth SIN afectar tu propia sesión de admin.
+    const uid = await createStaffAuthAccount(email, password)
+
+      await setDoc(doc(db, 'empleados', uid), {
       name: form.name.trim(),
       email,
       phone: form.phone.trim(),
@@ -147,8 +169,13 @@ async function submitNewEmployee() {
       phone: form.phone.trim(),
       password,
     }
+    }
   } catch (err: unknown) {
-    const code = (err as { code?: string })?.code
+    if (editingId.value) {
+      formError.value = 'No se pudo actualizar el empleado.'
+      console.error(err)
+    } else {
+      const code = (err as { code?: string })?.code
     if (code === 'auth/email-already-in-use') {
       formError.value = 'Ya existe una cuenta con ese correo/usuario.'
     } else if (code === 'auth/invalid-email') {
@@ -159,6 +186,8 @@ async function submitNewEmployee() {
       formError.value = 'No se pudo crear el empleado.'
       console.error(err)
     }
+    }
+
   } finally {
     isSubmitting.value = false
   }
@@ -192,7 +221,7 @@ async function submitNewEmployee() {
         class="bg-[#0e0e0e] border border-white/10 rounded-xl px-5 py-4 flex items-center justify-between"
       >
         <div class="flex items-center gap-4">
-          <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-[#e2b95a] bg-gradient-to-b from-[#5a4420] to-[#3a2f12] border border-[#c9a24b]/30">
+          <div class="hidden w-10 h-10 rounded-full md:flex items-center justify-center text-sm font-bold text-[#e2b95a] bg-gradient-to-b from-[#5a4420] to-[#3a2f12] border border-[#c9a24b]/30">
             {{ initial(empleado.name) }}
           </div>
           <div>
@@ -208,7 +237,7 @@ async function submitNewEmployee() {
                 Empleado
               </span>
             </div>
-            <p class="text-xs text-white/40 mt-0.5">@{{ empleado.username }} · {{ empleado.email }}</p>
+            <p class="text-xs text-white/40 mt-0.5">{{ empleado.email }}</p>
             <p class="text-xs text-white/40">{{ empleado.phone }}</p>
           </div>
         </div>
@@ -250,7 +279,7 @@ async function submitNewEmployee() {
         <div class="w-full max-w-md bg-[#0e0e0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
           <div class="flex items-center justify-between px-6 pt-5 pb-4 border-b border-white/10">
             <h2 class="font-serif text-lg font-bold text-white">
-              {{ createdEmployee ? '¡Empleado creado!' : 'Nuevo empleado' }}
+              {{ editingId ? 'Editar empleado' : 'Nuevo empleado' }}
             </h2>
             <button
               type="button"
@@ -313,7 +342,7 @@ async function submitNewEmployee() {
               />
             </div>
 
-            <div>
+            <div v-if="!editingId">
               <label class="block text-xs tracking-wide text-white/40 mb-1.5">CORREO O USUARIO</label>
               <input
                 v-model="form.email"

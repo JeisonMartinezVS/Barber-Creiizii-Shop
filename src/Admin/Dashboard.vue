@@ -87,11 +87,8 @@ async function handleLogout() {
     <div class="md:hidden border-b border-white/10 sticky top-0 bg-[#050505] z-20">
       <div class="flex items-center justify-between px-4 py-3">
         <div class="flex items-center gap-2">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-[#c9a24b]">
-            <circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" />
-            <line x1="20" y1="4" x2="8.12" y2="15.88" /><line x1="14.47" y1="14.48" x2="20" y2="20" /><line x1="8.12" y1="8.12" x2="12" y2="12" />
-          </svg>
-          <span class="text-white font-serif font-bold text-base">Admin</span>
+          <img src="../../public/icon.png" alt="Creiizii" class="w-8 h-8">
+          <span class="text-white font-serif font-bold text-base">Bienvenido, {{ authStore.user?.displayName || authStore.user?.email }}</span>
         </div>
         <button
           type="button"

@@ -71,7 +71,8 @@ const todayStartOfDay = (() => {
 const citas = ref<Cita[]>([])
 let unsubscribe: (() => void) | null = null
 
-onMounted(() => {
+function loadCitas(){
+  unsubscribe?.()
   // Un empleado SOLO puede recibir de vuelta sus propias citas — esto no es
   // solo una comodidad visual, las reglas de Firestore exigen este mismo
   // filtro para no-admins (una consulta sin él sería rechazada por permisos).
@@ -87,6 +88,10 @@ onMounted(() => {
   unsubscribe = onSnapshot(q, (snapshot) => {
     citas.value = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Cita)
   })
+}
+
+onMounted(() => {
+  loadCitas()
 })
 onUnmounted(() => unsubscribe?.())
 
@@ -137,51 +142,7 @@ const groupedCitas = computed<CitaGroup[]>(() => {
   })
 })
 
-// --- Stats --------------------------------------------------------------
-function isToday(dateStr: string) {
-  return dateStr === todayStr
-}
-function isThisMonth(dateStr: string) {
-  const today = new Date()
-  const [y, m] = dateStr.split('-').map(Number)
-  return y === today.getFullYear() && m === today.getMonth() + 1
-}
 
-const stats = computed(() => {
-  const today = citas.value.filter((c) => isToday(c.date))
-  const thisMonth = citas.value.filter((c) => isThisMonth(c.date))
-  const pendientes = citas.value.filter((c) => c.status === 'pendiente')
-  const ingresosHoy = today
-    .filter((c) => c.status !== 'cancelada')
-    .reduce((sum, c) => sum + c.total, 0)
-
-  return [
-    {
-      label: 'Citas hoy',
-      value: String(today.length),
-      accent: '#c9a24b',
-      icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
-    },
-    {
-      label: 'Este mes',
-      value: String(thisMonth.length),
-      accent: '#5b9bf7',
-      icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
-    },
-    {
-      label: 'Ingresos hoy',
-      value: `$${ingresosHoy.toLocaleString('es-CO')}`,
-      accent: '#34d399',
-      icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`,
-    },
-    {
-      label: 'Pendientes',
-      value: String(pendientes.length),
-      accent: '#f2b705',
-      icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
-    },
-  ]
-})
 
 // --- Row actions dropdown -------------------------------------------------
 const openMenuId = ref<string | null>(null)
@@ -215,6 +176,16 @@ async function setStatus(cita: Cita, status: CitaStatus) {
 const citaToDelete = ref<Cita | null>(null)
 const isDeleting = ref(false)
 
+const citaToProducts = ref<Cita | null>(null)
+
+function openProducts(cita: Cita) {
+  citaToProducts.value = cita
+}
+
+function closeProducts() {
+  citaToProducts.value = null
+}
+
 function askDelete(cita: Cita) {
   closeMenu()
   citaToDelete.value = cita
@@ -236,8 +207,8 @@ async function confirmDelete() {
 }
 
 function refresh() {
-  // onSnapshot already keeps this live — kept as a visible affordance/no-op
-  // in case a manual refetch is ever needed (e.g. after adding pagination).
+  console.log('Refrescando agenda...')
+  loadCitas()
 }
 </script>
 
@@ -332,11 +303,16 @@ function refresh() {
 
               <div class="flex items-center justify-between sm:justify-end gap-3 flex-wrap sm:ml-auto pl-[4.5rem] sm:pl-0">
                 <div class="text-right">
-                  <p class="text-sm font-bold text-[#c9a24b]">${{ cita.total.toLocaleString('es-CO') }}</p>
-                  <p v-if="cita.products?.length" class="text-xs text-white/30">
-                    incl. {{ cita.products.length }} producto{{ cita.products.length > 1 ? 's' : '' }}
-                  </p>
-                </div>
+  <p class="text-sm font-bold text-[#c9a24b]">${{ cita.total.toLocaleString('es-CO') }}</p>
+  <button
+    v-if="cita.products?.length"
+    type="button"
+    class="text-xs text-white/30 hover:text-[#c9a24b] transition underline underline-offset-2"
+    @click="openProducts(cita)"
+  >
+    incl. {{ cita.products.length }} producto{{ cita.products.length > 1 ? 's' : '' }}
+  </button>
+</div>
 
                 <span
                   class="flex items-center gap-1.5 text-xs font-semibold rounded-lg border px-3 py-1.5 shrink-0"
@@ -392,6 +368,80 @@ function refresh() {
       </div>
     </div>
 
+    <!-- Modal: productos de la cita -->
+<Teleport to="body">
+  <div
+    v-if="citaToProducts"
+    class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4"
+    @click.self="closeProducts"
+  >
+    <div class="w-full max-w-sm bg-[#0e0e0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+      <div class="px-6 pt-6 pb-4">
+        <div class="flex items-start justify-between gap-4 mb-5">
+          <div>
+            <p class="text-xs tracking-wide text-[#c9a24b] mb-1">PRODUCTOS</p>
+            <h2 class="font-serif text-lg font-bold text-white">
+              Productos de la cita
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            class="w-8 h-8 flex items-center justify-center rounded-lg border border-white/10 text-white/50 hover:text-white hover:border-white/20 transition"
+            aria-label="Cerrar"
+            @click="closeProducts"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="space-y-3">
+          <div
+            v-for="product in citaToProducts.products"
+            :key="product.id"
+            class="flex items-center justify-between gap-4 bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3"
+          >
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center bg-[#3a2f12] text-[#c9a24b] border border-[#c9a24b]/20">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4Z" />
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                  <line x1="12" y1="22.08" x2="12" y2="12" />
+                </svg>
+              </div>
+
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-white truncate">
+                  {{ product.name }}
+                </p>
+                <p class="text-xs text-white/40">
+                  Producto
+                </p>
+              </div>
+            </div>
+
+            <p class="text-sm font-semibold text-[#c9a24b] shrink-0">
+              ${{ product.price.toLocaleString('es-CO') }}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end px-6 pb-6 pt-2">
+        <button
+          type="button"
+          class="text-sm font-semibold text-white/70 border border-white/10 rounded-lg px-4 py-2.5 hover:border-white/25 hover:text-white transition"
+          @click="closeProducts"
+        >
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+</Teleport>
     <!-- Modal: confirmar eliminación -->
     <Teleport to="body">
       <div v-if="citaToDelete" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
