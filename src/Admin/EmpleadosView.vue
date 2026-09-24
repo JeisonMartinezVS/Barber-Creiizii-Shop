@@ -103,13 +103,19 @@ function closeModal() {
 }
 
 function whatsappUrl(phone: string, name: string, username: string, password: string): string {
-  const digits = phone.replace(/\D/g, '')
+  let digits = phone.replace(/\D/g, '')
+
+  if (digits.length === 10) {
+    digits = `57${digits}`
+  }
+
   const message =
     `Hola ${name}, ya tienes acceso al panel de Barber Creiizii Shop.\n\n` +
     `Usuario: ${username}\n` +
     `Contraseña temporal: ${password}\n\n` +
     `Cámbiala apenas puedas iniciar sesión.`
-  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
+
+  return `https://api.whatsapp.com/send/?phone=${digits}&text=${encodeURIComponent(message)}&app_absent=0`
 }
 
 async function submitNewEmployee() {
