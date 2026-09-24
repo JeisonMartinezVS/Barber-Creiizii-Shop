@@ -1,6 +1,12 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import Whatsapp from '../../public/icons/Whatsapp.vue'
 import Instagram from '../../public/icons/Instagram.vue'
+import LegalModal from './LegalModal.vue'
+import { LEGAL_DOCS, type LegalDocId } from '../content/legal'
+
+const openLegalId = ref<LegalDocId | null>(null)
+const openLegalDoc = computed(() => LEGAL_DOCS.find((d) => d.id === openLegalId.value) ?? null)
 
 interface DayHours {
   label: string
@@ -187,6 +193,25 @@ const mapEmbedUrl =
           <div class="w-8 h-px bg-linear-to-l from-transparent to-primary" />
         </div>
       </div>
+
+      <!-- Enlaces legales -->
+      <nav
+        aria-label="Información legal"
+        class="mt-6 flex flex-wrap items-center justify-center md:justify-start gap-x-2 gap-y-2 text-xs"
+      >
+        <template v-for="(legalDoc, index) in LEGAL_DOCS" :key="legalDoc.id">
+          <span v-if="index > 0" class="text-white/20" aria-hidden="true">·</span>
+          <button
+            type="button"
+            class="text-muted-foreground hover:text-primary underline-offset-4 hover:underline transition"
+            @click="openLegalId = legalDoc.id"
+          >
+            {{ legalDoc.label }}
+          </button>
+        </template>
+      </nav>
     </div>
+
+    <LegalModal v-if="openLegalDoc" :doc="openLegalDoc" @close="openLegalId = null" />
   </footer>
 </template>
