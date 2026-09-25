@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import ChangePasswordModal from '../components/dashboard/ChangePasswordModal.vue'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+
+// Solo lo ven los empleados en su primer ingreso: se descarga cuando hace falta.
+const ChangePasswordModal = defineAsyncComponent(() => import('../components/dashboard/ChangePasswordModal.vue'))
 
 interface NavItem {
   name: string

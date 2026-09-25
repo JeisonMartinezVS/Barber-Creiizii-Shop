@@ -27,6 +27,7 @@ const instagramUsername = 'creiizii_barber_shop'
         height="600"
         frameborder="0"
         scrolling="no"
+        loading="lazy"
         class="w-full min-h-[400px] md:min-h-[600px] rounded-xl border border-white/10"
       ></iframe>
     </div>

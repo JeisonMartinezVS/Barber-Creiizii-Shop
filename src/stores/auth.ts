@@ -8,7 +8,8 @@ import {
   type User,
 } from 'firebase/auth'
 import { doc, getDoc } from 'firebase/firestore'
-import { auth, db } from '../config/firebase'
+import { db } from '../config/firebase'
+import { auth } from '../config/firebaseAuth'
 import { fetchAuthAccountTimestamps } from '../lib/authAccountInfo'
 
 // The login screen shows a "usuario" field, but Firebase Auth needs an email.

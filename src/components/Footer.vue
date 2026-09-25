@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
 import Whatsapp from '../../public/icons/Whatsapp.vue'
 import Instagram from '../../public/icons/Instagram.vue'
-import LegalModal from './LegalModal.vue'
 import { LEGAL_DOCS, type LegalDocId } from '../content/legal'
+
+const LegalModal = defineAsyncComponent(() => import('./LegalModal.vue'))
 
 const openLegalId = ref<LegalDocId | null>(null)
 const openLegalDoc = computed(() => LEGAL_DOCS.find((d) => d.id === openLegalId.value) ?? null)

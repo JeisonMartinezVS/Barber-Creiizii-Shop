@@ -30,7 +30,13 @@ export default defineComponent({
     ></div>
 
     <div class="relative z-10 flex flex-col items-center justify-center gap-3">
-      <img src="../../public/logo.jpg" alt="Barber Creiizii Shop" class="h-64 md:h-80 object-contain" />
+      <img
+        src="../../public/logo.jpg"
+        alt="Barber Creiizii Shop"
+        class="h-64 md:h-80 object-contain"
+        fetchpriority="high"
+        decoding="async"
+      />
 
       <p class="flex items-center gap-3 text-xs tracking-[0.3em] text-[#c9a24b] mt-2">
         <span class="w-8 h-px bg-[#c9a24b]/50"></span>

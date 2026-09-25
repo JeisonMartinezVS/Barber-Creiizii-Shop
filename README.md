@@ -176,6 +176,10 @@ VITE_ADMIN_EMAIL_DOMAIN=creiizii-admin.internal
 
 # Muestra accesos rápidos de prueba en el login. Debe ser "false" en producción.
 VITE_SHOW_DEMO_ACCOUNTS=false
+
+# Opcional. Dominio para SEO (canonical, Open Graph, sitemap.xml).
+# Por defecto: https://www.creiizii.com
+# VITE_SITE_URL=https://www.creiizii.com
 ```
 
 > [!NOTE]
@@ -201,10 +205,12 @@ VITE_SHOW_DEMO_ACCOUNTS=false
 ### Sitio web (Vercel)
 
 1. Conecta el repositorio en Vercel.
-2. Configura las variables de entorno de la sección anterior (con `VITE_SHOW_DEMO_ACCOUNTS=false`).
+2. Configura las variables de entorno de la sección anterior (con `VITE_SHOW_DEMO_ACCOUNTS=false`). El dominio de producción es **https://www.creiizii.com**.
 3. Build: `npm run build`. Carpeta de salida: `dist`.
 
 `vercel.json` redirige todas las rutas a `index.html` para que funcione el enrutamiento de la SPA.
+
+**SEO:** el build genera `robots.txt` y `sitemap.xml` a partir de `VITE_SITE_URL` (ver `vite.config.ts`). Las metaetiquetas base y los datos estructurados (`BarberShop`, schema.org) están en `index.html`, y el título y la descripción de cada ruta en `src/router/seo.ts`.
 
 ### Cloud Functions (Firebase)
 

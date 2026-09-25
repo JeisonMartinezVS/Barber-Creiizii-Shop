@@ -72,7 +72,14 @@ const whatsappUrl =
           class="bg-[#0e0e0e] border border-white/10 rounded-xl overflow-hidden flex flex-col"
         >
           <div class="aspect-square flex items-center justify-center bg-white/5">
-            <img v-if="product.image" :src="product.image" :alt="product.name" class="w-full h-full object-cover" />
+            <img
+              v-if="product.image"
+              :src="product.image"
+              :alt="product.name"
+              loading="lazy"
+              decoding="async"
+              class="w-full h-full object-cover"
+            />
             <svg v-else width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-white/15">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
               <polyline points="3.27 6.96 12 12.01 20.73 6.96" />

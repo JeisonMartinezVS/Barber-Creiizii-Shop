@@ -1,13 +1,12 @@
-<script lang="ts">
-import { defineComponent } from 'vue'
+<script setup lang="ts">
+import { defineAsyncComponent } from 'vue'
 import Hero from '@/components/Hero.vue'
-import Services from '@/components/Services.vue'
-import Contact from '@/components/Contact.vue'
-import Ourwork from '@/components/Ourwork.vue'
 
-export default defineComponent({
-  components: { Hero, Services, Contact, Ourwork },
-})
+// El Hero es lo primero que se ve, así que se carga de inmediato. Las
+// secciones de más abajo se descargan en paralelo, en su propio chunk.
+const Services = defineAsyncComponent(() => import('@/components/Services.vue'))
+const Ourwork = defineAsyncComponent(() => import('@/components/Ourwork.vue'))
+// const Contact = defineAsyncComponent(() => import('@/components/Contact.vue'))
 </script>
 
 <template>
