@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <!--
-      SEO. El marcador de dominio de las URLs absolutas lo reemplaza
-      vite.config.ts con VITE_SITE_URL (dominio de producción). Título, descripción y canonical se
+      SEO. Dominio de producción: https://www.creiizii.com (también en
+      src/router/seo.ts y vite.config.ts). Título, descripción y canonical se
       actualizan por ruta desde src/router/seo.ts.
     -->
     <title>Barber Creiizii | Barbería en Medellín – Cortes, barba y estilo</title>
@@ -18,7 +18,10 @@
     <meta name="author" content="Barber Creiizii" />
     <meta name="theme-color" content="#0a0a0a" />
     <meta name="format-detection" content="telephone=no" />
-    <link rel="canonical" href="__SITE_URL__/" />
+    <link rel="canonical" href="https://www.creiizii.com/" />
+
+    <!-- Rendimiento: abre la conexión a Firestore antes de que la pida la app -->
+    <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
 
     <!-- Íconos -->
     <link rel="icon" href="/favicon.ico" sizes="any" />
@@ -38,8 +41,8 @@
       property="og:description"
       content="Cortes de cabello, arreglo de barba y estilo en Aures II, Medellín. Reserva tu cita en línea."
     />
-    <meta property="og:url" content="__SITE_URL__/" />
-    <meta property="og:image" content="__SITE_URL__/logo.jpg" />
+    <meta property="og:url" content="https://www.creiizii.com/" />
+    <meta property="og:image" content="https://www.creiizii.com/logo.jpg" />
     <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="643" />
     <meta property="og:image:height" content="487" />
@@ -52,19 +55,32 @@
       name="twitter:description"
       content="Cortes de cabello, arreglo de barba y estilo en Aures II, Medellín. Reserva tu cita en línea."
     />
-    <meta name="twitter:image" content="__SITE_URL__/logo.jpg" />
+    <meta name="twitter:image" content="https://www.creiizii.com/logo.jpg" />
+
+    <!-- Datos estructurados: sitio web -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "@id": "https://www.creiizii.com/#website",
+        "name": "Barber Creiizii",
+        "url": "https://www.creiizii.com/",
+        "inLanguage": "es-CO",
+        "publisher": { "@id": "https://www.creiizii.com/#barbershop" }
+      }
+    </script>
 
     <!-- Datos estructurados: negocio local (Google Maps / resultados enriquecidos) -->
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "BarberShop",
-        "@id": "__SITE_URL__/#barbershop",
+        "@id": "https://www.creiizii.com/",
         "name": "Barber Creiizii",
         "description": "Barbería premium en Medellín. Cortes de cabello, arreglo de barba y estilo para caballeros.",
-        "url": "__SITE_URL__/",
-        "image": "__SITE_URL__/logo.jpg",
-        "logo": "__SITE_URL__/icon.png",
+        "url": "https://www.creiizii.com/",
+        "image": "https://www.creiizii.com/logo.jpg",
+        "logo": "https://www.creiizii.com/icon.png",
         "telephone": "+57 300 628 2601",
         "currenciesAccepted": "COP",
         "address": {
@@ -101,6 +117,21 @@
   </head>
   <body>
     <div id="app"></div>
+    <!-- Contenido para navegadores y bots que no ejecutan JavaScript -->
+    <noscript>
+      <h1>Barber Creiizii – Barbería en Medellín</h1>
+      <p>
+        Barbería premium en Aures II, Medellín. Cortes de cabello, arreglo de barba y estilo para
+        caballeros.
+      </p>
+      <p>Dirección: Carrera 95 #88-40, Aures II, Medellín, Antioquia, Colombia.</p>
+      <p>
+        Reservas y contacto por WhatsApp: <a href="https://wa.me/573006282601">+57 300 628 2601</a> ·
+        Instagram: <a href="https://instagram.com/creiizii_barber_shop">@creiizii_barber_shop</a>
+      </p>
+      <p>Horario: lunes a viernes 10:00–21:00 · sábado 10:00–22:00 · domingo 12:00–19:00.</p>
+      <p><a href="/productos">Ver productos</a></p>
+    </noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

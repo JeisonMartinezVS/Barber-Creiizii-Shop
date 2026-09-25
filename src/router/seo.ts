@@ -17,7 +17,8 @@ const DEFAULT_SEO: SeoMeta = {
     'Barbería premium en Aures II, Medellín. Cortes de cabello, arreglo de barba y estilo para caballeros. Reserva tu cita en línea en segundos.',
 }
 
-const SITE_URL = ((import.meta.env.VITE_SITE_URL as string | undefined) || 'https://www.creiizii.com').replace(/\/+$/, '')
+// Dominio de producción (también en index.html y vite.config.ts).
+const SITE_URL = 'https://www.creiizii.com'
 
 function setMeta(attr: 'name' | 'property', key: string, content: string) {
   let el = document.head.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`)

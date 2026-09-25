@@ -177,9 +177,6 @@ VITE_ADMIN_EMAIL_DOMAIN=creiizii-admin.internal
 # Muestra accesos rápidos de prueba en el login. Debe ser "false" en producción.
 VITE_SHOW_DEMO_ACCOUNTS=false
 
-# Opcional. Dominio para SEO (canonical, Open Graph, sitemap.xml).
-# Por defecto: https://www.creiizii.com
-# VITE_SITE_URL=https://www.creiizii.com
 ```
 
 > [!NOTE]
@@ -210,7 +207,7 @@ VITE_SHOW_DEMO_ACCOUNTS=false
 
 `vercel.json` redirige todas las rutas a `index.html` para que funcione el enrutamiento de la SPA.
 
-**SEO:** el build genera `robots.txt` y `sitemap.xml` a partir de `VITE_SITE_URL` (ver `vite.config.ts`). Las metaetiquetas base y los datos estructurados (`BarberShop`, schema.org) están en `index.html`, y el título y la descripción de cada ruta en `src/router/seo.ts`.
+**SEO:** el build genera `robots.txt` y `sitemap.xml` para `https://www.creiizii.com` (ver `vite.config.ts`). Las metaetiquetas base y los datos estructurados (`BarberShop`, schema.org) están en `index.html`, y el título y la descripción de cada ruta en `src/router/seo.ts`.
 
 ### Cloud Functions (Firebase)
 
