@@ -11,8 +11,8 @@ const password = ref('')
 const showPassword = ref(false)
 const formError = ref('')
 
-// Set VITE_SHOW_DEMO_ACCOUNTS=false in production .env — this row is meant
-// for your own testing while building, not for the live site.
+// Poner VITE_SHOW_DEMO_ACCOUNTS=false en producción: esta fila es solo para
+// pruebas durante el desarrollo, no para el sitio publicado.
 const showDemoAccounts = import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true'
 
 const demoAccounts = [
@@ -21,8 +21,8 @@ const demoAccounts = [
   { label: 'Camilo', username: 'camilo' },
 ]
 
-// Only pre-fills the username — never the password. The password always has
-// to be typed, so nothing sensitive ever lives in this file.
+// Solo rellena el usuario, nunca la contraseña: siempre hay que escribirla,
+// así que en este archivo no hay nada sensible.
 function fillDemoUser(demoUsername: string) {
   username.value = demoUsername
   password.value = ''
@@ -65,7 +65,7 @@ async function handleSubmit() {
             </div>
           </div>
 
-          <!-- Heading -->
+          <!-- Encabezado -->
           <h1 class="font-serif text-3xl text-center text-white font-bold mb-1">
             Panel de Gestión
           </h1>

@@ -85,7 +85,7 @@ const form = reactive({
   phone: '',
 })
 
-// Set once creation succeeds — drives the "send via WhatsApp" screen.
+// Se llena cuando la creación funciona; controla la pantalla de "enviar por WhatsApp".
 const createdEmployee = ref<{ name: string; username: string; phone: string; password: string } | null>(null)
 
 function openModal() {

@@ -14,8 +14,8 @@ interface DayHours {
   hours: string
 }
 
-// TODO: pull this from the same Firestore "horarios" doc used in the admin
-// panel (Horarios view) so the site and the admin never fall out of sync.
+// TODO: leer esto del mismo documento de Firestore que usa la vista Horarios
+// del panel, para que el sitio y el panel nunca queden desincronizados.
 const weekSchedule: DayHours[] = [
   { label: 'Domingo', hours: '12:00 - 19:00' },
   { label: 'Lunes', hours: '10:00 - 21:00' },
@@ -26,11 +26,11 @@ const weekSchedule: DayHours[] = [
   { label: 'Sábado', hours: '10:00 - 22:00' },
 ]
 
-// getDay(): 0 = Domingo ... 6 = Sábado, matching the order above.
+// getDay(): 0 = Domingo ... 6 = Sábado, igual que el orden de arriba.
 const todayIndex = new Date().getDay()
 
-// TODO: replace with the real "Compartir > Insertar un mapa" embed URL for
-// your actual location from Google Maps.
+// TODO: reemplazar por la URL real de Google Maps ("Compartir > Insertar un
+// mapa") de la ubicación del negocio.
 const mapEmbedUrl =
   'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3966.0234!2d-75.6279!3d6.2886!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x8e44299c8c8c8c8d%3A0x8c8c8c8c8c8c8c8c!2sCra.%2095%20%2388-40%2C%20Medell%C3%ADn%2C%20Antioquia!5e0!3m2!1ses!2sco!4v1234567890'
 </script>
@@ -43,7 +43,7 @@ const mapEmbedUrl =
 
     <div class="max-w-11/12 w-full mx-auto py-16 px-4">
       <div class="grid grid-cols-1 md:grid-cols-4 gap-10 md:gap-6">
-        <!-- Brand -->
+        <!-- Marca -->
         <div class="flex flex-col gap-3">
           <p class="flex items-center gap-2 font-gothic text-neutral-content text-xl">
             <svg

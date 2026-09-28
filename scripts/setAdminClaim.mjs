@@ -1,18 +1,18 @@
-// Run ONCE, from the project root:
+// Ejecutar UNA sola vez, desde la raíz del proyecto:
 //   node scripts/setAdminClaim.mjs
 //
-// Requires:
-//   1. `npm install firebase-admin` (run once, from the project root)
-//   2. A service account key JSON downloaded from:
-//      Firebase Console > Project settings (gear icon) > Service accounts
-//      > Generate new private key
-//   3. Point to that file with an environment variable before running —
-//      see the PowerShell/CMD commands below.
+// Requisitos:
+//   1. `npm install firebase-admin` (una vez, desde la raíz del proyecto)
+//   2. Un JSON con la llave de una cuenta de servicio, descargado desde:
+//      Consola de Firebase > Configuración del proyecto (engranaje) >
+//      Cuentas de servicio > Generar nueva clave privada
+//      Guárdalo FUERA del repositorio: da control total del proyecto.
+//   3. Indicar la ruta de ese archivo en la variable de entorno
+//      GOOGLE_APPLICATION_CREDENTIALS antes de ejecutar.
 //
-// This is only needed because the current admin account was created
-// directly in the Firebase Console before this custom claim existed —
-// anyone created through the "Nuevo empleado" form already gets the role
-// claim automatically, no script needed for them.
+// Solo hace falta porque la cuenta admin se creó directamente en la consola
+// de Firebase. Hoy los roles se leen de Firestore (empleados/{uid}.role) y
+// quien se crea desde el formulario "Nuevo empleado" no necesita este script.
 
 import { readFileSync } from 'node:fs'
 import admin from 'firebase-admin'

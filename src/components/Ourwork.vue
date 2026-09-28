@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Instagram's own "Profile Embed" iframe — no API keys, no Cloud Function.
+// Iframe oficial de Instagram ("Profile Embed"): sin API keys ni Cloud Functions.
 const instagramUsername = 'creiizii_barber_shop'
 </script>
 

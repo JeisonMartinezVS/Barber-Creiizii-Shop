@@ -1,7 +1,7 @@
 <script setup lang="ts">
 defineProps<{
   modelValue: boolean
-  color?: string // hex for the "on" state, defaults to green
+  color?: string // color hex del estado "encendido"; por defecto, verde
 }>()
 defineEmits<{ (e: 'update:modelValue', value: boolean): void }>()
 </script>

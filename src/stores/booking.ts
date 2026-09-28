@@ -51,11 +51,11 @@ export interface DaySchedule {
   end: string
 }
 
-// getDay(): 0 = Domingo ... 6 = Sábado — this order matches that everywhere.
+// getDay(): 0 = Domingo ... 6 = Sábado; este orden se respeta en todo el proyecto.
 export const WEEKDAY_LABELS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 
-// Used for any barbero who hasn't set up their own horario yet in
-// TimeView.vue — sensible default so nothing breaks before they touch it.
+// Horario por defecto para los barberos que aún no configuraron el suyo en
+// TimeView.vue, para que nada falle antes de que lo editen.
 export function defaultSchedule(): DaySchedule[] {
   return WEEKDAY_LABELS.map((label) => ({ label, enabled: true, start: '10:00', end: '21:00' }))
 }
@@ -113,9 +113,8 @@ function clearStoredBooking() {
   localStorage.removeItem(STORAGE_KEY)
 }
 
-// Shape stored on each empleados/{uid} doc's own `services` field — same
-// shape your CutsView.vue already writes to `config.services`, just now
-// scoped to one barbero instead of shared globally.
+// Forma de los servicios guardados en `config.services`, la misma que
+// escribe CutsView.vue.
 interface RawServiceItem {
   name?: string
   price?: string | number
@@ -160,14 +159,8 @@ export const useBookingStore = defineStore('booking', () => {
   onSnapshot(
   collection(db, 'empleados'),
     (snapshot) => {
-    console.log(
-      'EMPLEADOS FIREBASE:',
-      snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }))
-    )
-
+    // Solo se toman id, nombre y rol. No registrar los documentos en consola:
+    // incluyen correo y teléfono del personal y cualquier visitante los vería.
     barberos.value = snapshot.docs
       .map((d) => {
         const data = d.data()

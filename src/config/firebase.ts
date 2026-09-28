@@ -1,11 +1,10 @@
-// Import the functions you need from the SDKs you need
+// Funciones de los SDK de Firebase que usa la app
 import { initializeApp } from 'firebase/app'
 import { getFirestore } from 'firebase/firestore'
-// TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// Configuración web de Firebase (valores en el archivo .env).
+// Desde el SDK v7.20.0, measurementId es opcional.
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -16,7 +15,7 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 }
 
-// Initialize Firebase
+// Inicializa Firebase
 export const app = initializeApp(firebaseConfig)
 export const db = getFirestore(app)
 // Firebase Auth vive en ./firebaseAuth.ts: solo lo usa el panel (/login y

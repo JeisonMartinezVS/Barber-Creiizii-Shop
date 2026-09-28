@@ -18,7 +18,7 @@ interface NavItem {
   adminOnly?: boolean
 }
 
-// Empleados solo ven Agenda y Horarios — todo lo demás es admin-only, tanto
+// Empleados solo ven Agenda, Reportes y Horarios; lo demás es solo para admin, tanto
 // aquí (visual) como en las reglas de Firestore (lo que de verdad protege).
 const navItems: NavItem[] = [
   {
@@ -86,7 +86,7 @@ async function handleLogout() {
 
 <template>
   <div class="min-h-screen flex flex-col md:flex-row bg-[#050505]">
-    <!-- ===== Mobile top bar + horizontal nav (< md) ===== -->
+    <!-- ===== Barra superior + navegación horizontal en móvil (< md) ===== -->
     <div class="md:hidden border-b border-white/10 sticky top-0 bg-[#050505] z-20">
       <div class="flex items-center justify-between px-4 py-3">
         <div class="flex items-center gap-2">
@@ -128,7 +128,7 @@ async function handleLogout() {
       </nav>
     </div>
 
-    <!-- ===== Desktop sidebar (md+) ===== -->
+    <!-- ===== Barra lateral de escritorio (md+) ===== -->
     <aside class="hidden md:flex w-60 shrink-0 border-r border-white/10 flex-col justify-between">
       <div>
         <div class="flex items-center gap-3 px-5 py-5 border-b border-white/10">
@@ -181,7 +181,7 @@ async function handleLogout() {
       </div>
     </aside>
 
-    <!-- Content -->
+    <!-- Contenido -->
     <main class="flex-1 min-w-0 p-4 md:p-6">
       <router-view />
     </main>

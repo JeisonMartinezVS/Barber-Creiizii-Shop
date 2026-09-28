@@ -58,8 +58,8 @@ function handleCustomDateChange() {
   store.selectDate(picked)
 }
 
-// Appointments need at least this much lead time — also means "10:00" never
-// shows up as bookable at 10:05am, only from the next slot forward.
+// Anticipación mínima para reservar: por ejemplo, a las 10:05 ya no se
+// ofrece "10:00", solo desde el siguiente horario en adelante.
 const MIN_LEAD_MINUTES = 30
 
 const timeSlots = computed(() => {
@@ -102,16 +102,16 @@ const fechaLarga = computed(() => {
   return `${weekday}, ${d.getDate()} De ${MONTHS[d.getMonth()]} De ${d.getFullYear()}`
 })
 
-// Only steps with something to validate show a hint/blocking state; the
-// rest (Barbero/Servicio) auto-advance the instant something is picked.
+// Solo los pasos que requieren validación muestran un aviso o bloquean; los
+// demás (Barbero/Servicio) avanzan solos apenas se elige algo.
 const footerHint = computed(() => {
   if (store.currentStep === 'Barbero' && !store.selectedBarbero) return 'Selecciona un barbero para continuar'
   if (store.currentStep === 'Servicio' && !store.selectedService) return 'Selecciona un servicio para continuar'
   return ''
 })
 
-// "Special" screens (stored booking / just confirmed) replace the whole
-// wizard chrome — no step counter, no breadcrumb, no wizard footer.
+// Las pantallas "especiales" (cita guardada / recién confirmada) reemplazan
+// todo el asistente: sin contador de pasos, sin migas y sin pie.
 const isSpecialScreen = computed(() => store.isConfirmed || store.showStoredBooking)
 
 function initial(name: string) {
@@ -134,7 +134,7 @@ function buildGoogleCalendarUrl(opts: { title: string; start: Date; durationMinu
   return `https://calendar.google.com/calendar/render?${params.toString()}`
 }
 
-// The button on the "just confirmed" success screen.
+// Botón de la pantalla de éxito "recién confirmada".
 const justConfirmedGCalUrl = computed(() => {
   if (!store.selectedService || !store.selectedBarbero || !store.selectedDate || !store.selectedTime) return '#'
   const [h = 0, m = 0] = store.selectedTime.split(':').map(Number)
@@ -148,7 +148,7 @@ const justConfirmedGCalUrl = computed(() => {
   })
 })
 
-// The button on the "you already have a booking" screen (returning visit).
+// Botón de la pantalla "ya tienes una cita" (visita de regreso).
 const storedGCalUrl = computed(() => {
   const b = store.storedBooking
   if (!b) return '#'
@@ -167,9 +167,9 @@ const storedFechaLarga = computed(() => {
   return `${weekday}, ${d.getDate()} de ${MONTHS[d.getMonth()]}`
 })
 
-// Local UI flag: once the person cancels from the "just booked" success
-// screen, swap its two buttons for a plain confirmation instead of leaving
-// a dead "cancel a cancelled booking" button.
+// Marca local de la interfaz: si la persona cancela desde la pantalla de
+// éxito, sus dos botones se cambian por una confirmación simple en vez de
+// dejar un botón inútil de "cancelar una cita ya cancelada".
 const cancelledJustNow = ref(false)
 
 async function handleCancelJustConfirmed() {
@@ -192,7 +192,7 @@ async function handleCancelStored() {
           class="absolute inset-x-6 -top-px h-px bg-gradient-to-r from-transparent via-primary to-transparent"
         ></div>
         <div class="bg-[#0e0e0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-          <!-- Header -->
+          <!-- Encabezado -->
           <div class="flex items-start justify-between px-6 pt-5 pb-4 border-b border-white/10 shrink-0">
             <div>
               <h2 class="font-serif text-xl font-bold text-white">Reservar Cita</h2>
@@ -213,7 +213,7 @@ async function handleCancelStored() {
             </button>
           </div>
 
-          <!-- Step breadcrumb -->
+          <!-- Indicador de pasos -->
           <div
             v-if="!isSpecialScreen"
             class="flex items-center justify-center gap-2 px-4 py-3 border-b border-white/10 overflow-x-auto shrink-0"
@@ -247,7 +247,7 @@ async function handleCancelStored() {
             </template>
           </div>
 
-          <!-- Body -->
+          <!-- Cuerpo -->
           <div class="px-6 py-5 overflow-y-auto grow">
             <p
               v-if="store.submitError && !isSpecialScreen"
@@ -310,7 +310,7 @@ async function handleCancelStored() {
               </button>
             </div>
 
-            <!-- Success screen (justo después de confirmar) -->
+            <!-- Pantalla de éxito (justo después de confirmar) -->
             <div v-else-if="store.isConfirmed" class="py-8 text-center">
               <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
                 <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -360,13 +360,13 @@ async function handleCancelStored() {
               </template>
             </div>
 
-            <!-- Saving state (between clicking Confirmar and Firestore responding) -->
+            <!-- Guardando (entre el clic en Confirmar y la respuesta de Firestore) -->
             <div v-else-if="store.isSubmitting && store.currentStep === 'Productos'" class="py-16 text-center">
               <div class="w-8 h-8 mx-auto mb-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin"></div>
               <p class="text-sm text-white/40">Guardando tu cita...</p>
             </div>
 
-            <!-- Step 1: Barbero -->
+            <!-- Paso 1: Barbero -->
             <template v-else-if="store.currentStep === 'Barbero'">
               <p class="text-xs tracking-wide text-white/40 mb-3">ELIGE TU BARBERO</p>
               <div class="space-y-3">
@@ -398,7 +398,7 @@ async function handleCancelStored() {
               </div>
             </template>
 
-            <!-- Step 2: Servicio -->
+            <!-- Paso 2: Servicio -->
             <template v-else-if="store.currentStep === 'Servicio'">
               <div
                 v-if="store.selectedBarbero"
@@ -454,7 +454,7 @@ async function handleCancelStored() {
               </div>
             </template>
 
-            <!-- Step 3: Fecha -->
+            <!-- Paso 3: Fecha -->
             <template v-else-if="store.currentStep === 'Fecha'">
               <div
                 v-if="store.selectedService"
@@ -550,7 +550,7 @@ async function handleCancelStored() {
               </div>
             </template>
 
-            <!-- Step 4: Datos -->
+            <!-- Paso 4: Datos -->
             <template v-else-if="store.currentStep === 'Datos'">
               <div class="border border-white/10 rounded-xl p-4 mb-6">
                 <p class="text-xs tracking-wide text-primary mb-3">RESUMEN</p>
@@ -618,7 +618,7 @@ async function handleCancelStored() {
               </div>
             </template>
 
-            <!-- Step 5: Productos -->
+            <!-- Paso 5: Productos -->
             <template v-else-if="store.currentStep === 'Productos'">
               <div class="flex items-center gap-3 mb-4">
                 <span class="w-9 h-9 rounded-lg bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shrink-0">
@@ -702,7 +702,7 @@ async function handleCancelStored() {
             </template>
           </div>
 
-          <!-- Footer -->
+          <!-- Pie -->
           <div v-if="!isSpecialScreen" class="flex items-center justify-between px-6 py-4 border-t border-white/10 shrink-0">
             <button
               v-if="store.currentStepIndex > 0"

@@ -7,6 +7,12 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 .env
+.env.*
+!.env.example
+# Credenciales de Firebase Admin (cuentas de servicio): nunca deben subirse
+*serviceAccount*.json
+*service-account*.json
+*-firebase-adminsdk-*.json
 node_modules
 .DS_Store
 dist

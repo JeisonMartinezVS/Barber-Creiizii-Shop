@@ -31,7 +31,7 @@ export default defineComponent({
       bookingStore.open()
     }
 
-    // Close the panel automatically if the route changes (nav link clicked).
+    // Cierra el panel automáticamente si cambia la ruta (se hizo clic en un enlace).
     watch(
       () => route.fullPath,
       () => closeMobileMenu(),
@@ -59,7 +59,7 @@ export default defineComponent({
         Creiizii
       </router-link>
 
-      <!-- Menu (desktop) -->
+      <!-- Menú (escritorio) -->
       <div class="hidden md:flex justify-center items-center gap-6">
         <router-link
           v-for="value in config?.menu"
@@ -70,7 +70,7 @@ export default defineComponent({
         >
       </div>
 
-      <!-- Redes + Reservar (desktop) -->
+      <!-- Redes + Reservar (escritorio) -->
       <div class="hidden md:flex items-center gap-2">
         <a
           href="#"
@@ -99,7 +99,7 @@ export default defineComponent({
         </button>
       </div>
 
-      <!-- Hamburger (mobile only) -->
+      <!-- Botón hamburguesa (solo móvil) -->
       <button
         type="button"
         class="md:hidden w-9 h-9 flex items-center justify-center text-white"
@@ -118,7 +118,7 @@ export default defineComponent({
       </button>
     </div>
 
-    <!-- Mobile menu panel -->
+    <!-- Panel del menú móvil -->
     <div v-if="mobileMenuOpen" class="md:hidden border-t border-neutral-800 bg-background px-6 pt-4 pb-8">
       <nav class="flex flex-col gap-1">
         <router-link

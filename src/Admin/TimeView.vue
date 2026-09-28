@@ -111,7 +111,7 @@ async function saveSchedule() {
     <p v-if="loading" class="text-sm text-white/30 text-center py-10">Cargando horario...</p>
 
     <template v-else>
-      <!-- Today status -->
+      <!-- Estado de hoy -->
       <div class="bg-[#0e0e0e] border border-white/10 rounded-xl px-5 py-4 flex items-center justify-between mb-4">
         <div>
           <p class="text-sm font-semibold text-white">{{ targetBarberoName }} — ¿Trabaja hoy?</p>
@@ -120,7 +120,7 @@ async function saveSchedule() {
         <ToggleSwitch v-model="today.enabled" color="#c9a24b" />
       </div>
 
-      <!-- Weekly schedule -->
+      <!-- Horario semanal -->
       <div class="bg-[#0e0e0e] border border-white/10 rounded-xl overflow-hidden">
         <div class="px-5 py-3 border-b border-white/10">
           <p class="text-xs tracking-wide text-white/40">HORARIO SEMANAL</p>

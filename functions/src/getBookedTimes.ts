@@ -8,14 +8,15 @@ if (!getApps().length) {
 
 interface Input {
   barberoId: string
-  date: string // "YYYY-MM-DD", local calendar date
+  date: string // "YYYY-MM-DD", fecha local del calendario
 }
 
 /**
- * Public (no auth required) — but only ever returns a list of time strings
- * ("11:30"), never customer names/phones/etc. This is what lets the booking
- * modal grey out already-taken slots without needing to give the public
- * site read access to the citas collection (which does hold customer PII).
+ * Pública (no requiere sesión), pero solo devuelve una lista de horas
+ * ("11:30"), nunca nombres, teléfonos ni otros datos de clientes. Así el
+ * modal de reservas puede marcar los horarios ocupados sin darle al sitio
+ * público acceso de lectura a la colección citas (que sí tiene datos
+ * personales).
  */
 export const getBookedTimes = onCall<Input>(async (request) => {
   const {barberoId, date} = request.data ?? {};

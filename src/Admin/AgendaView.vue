@@ -7,7 +7,7 @@ import { formatLocalDate, getSlotId, useBookingStore } from '../stores/booking'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
 
 const authStore = useAuthStore()
-const bookingStore = useBookingStore() // reuses its live `barberos` list for the filter dropdown
+const bookingStore = useBookingStore() // reutiliza su lista en vivo de `barberos` para el filtro
 
 type CitaStatus = 'pendiente' | 'confirmada' | 'completada' | 'cancelada' | 'no_asistio'
 
@@ -95,13 +95,13 @@ onMounted(() => {
 })
 onUnmounted(() => unsubscribe?.())
 
-// --- Filters ----------------------------------------------------------
-const selectedDate = ref('') // "YYYY-MM-DD" from <input type="date">
+// --- Filtros ----------------------------------------------------------
+const selectedDate = ref('') // "YYYY-MM-DD" del <input type="date">
 const selectedStatus = ref('todos')
 const selectedBarber = ref('todos')
 
-// No-admins don't get a barbero filter at all — their query already only
-// returns their own citas, so there's nothing else to pick.
+// Los no-admin no tienen filtro de barbero: su consulta ya devuelve solo sus
+// propias citas, así que no hay nada más que elegir.
 if (!authStore.isAdmin && authStore.user) {
   selectedBarber.value = authStore.user.uid
 }
@@ -144,7 +144,7 @@ const groupedCitas = computed<CitaGroup[]>(() => {
 
 
 
-// --- Row actions dropdown -------------------------------------------------
+// --- Menú de acciones por fila ---------------------------------------------
 const openMenuId = ref<string | null>(null)
 function toggleMenu(id: string) {
   openMenuId.value = openMenuId.value === id ? null : id
@@ -162,8 +162,8 @@ async function releaseSlot(cita: Cita) {
     { status: 'cancelada' },
     { merge: true },
   ).catch(() => {
-    // If the slot doc never existed (e.g. a cita created before this
-    // feature), there's nothing to release — safe to ignore.
+    // Si el documento del horario nunca existió (p. ej. una cita creada antes
+    // de esta función), no hay nada que liberar: se puede ignorar.
   })
 }
 
@@ -216,7 +216,7 @@ function refresh() {
   <div>
     <DashboardStats />
 
-    <!-- Toolbar -->
+    <!-- Barra de herramientas -->
     <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
       <h1 class="font-serif text-xl font-bold text-white">Agenda de Citas</h1>
       <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -262,7 +262,7 @@ function refresh() {
       </div>
     </div>
 
-    <!-- Agenda list -->
+    <!-- Lista de la agenda -->
     <div v-if="groupedCitas.length === 0" class="bg-[#0e0e0e] border border-white/10 rounded-xl min-h-[280px] flex items-center justify-center">
       <div class="text-center py-16">
         <svg class="mx-auto mb-3 text-white/20" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">

@@ -3,18 +3,18 @@ import { createUserWithEmailAndPassword, getAuth, signOut } from 'firebase/auth'
 import { fetchAuthAccountTimestamps } from './authAccountInfo'
 
 /**
- * Creates a Firebase Auth account WITHOUT signing in as that account in the
- * current tab. Firebase's normal createUserWithEmailAndPassword(auth, ...)
- * signs in as the new user in whatever `auth` you pass it — if you pass your
- * app's main `auth`, that replaces the admin's own session immediately.
+ * Crea una cuenta de Firebase Auth SIN iniciar sesión con ella en la pestaña
+ * actual. El createUserWithEmailAndPassword(auth, ...) normal de Firebase
+ * inicia sesión como el nuevo usuario en el `auth` que se le pase: si fuera
+ * el `auth` principal de la app, reemplazaría de inmediato la sesión del admin.
  *
- * The fix: spin up a second, throwaway Firebase "app" instance (same
- * project, same config — just a second connection) with its own separate
- * Auth state, create the user there, sign out of THAT instance, then tear
- * it down. The admin's own session in the main app/tab is never touched.
+ * La solución: levantar una segunda instancia desechable de Firebase (mismo
+ * proyecto y configuración, solo otra conexión) con su propio estado de
+ * Auth, crear ahí el usuario, cerrar la sesión de ESA instancia y
+ * destruirla. La sesión del admin en la app principal nunca se toca.
  *
- * No Cloud Function, no Admin SDK, no deploy — this runs entirely in the
- * browser with the Firebase config you already have.
+ * Sin Cloud Functions, sin Admin SDK y sin despliegues: todo corre en el
+ * navegador con la configuración de Firebase que ya existe.
  *
  * También devuelve `tempPasswordSetAt`: el passwordUpdatedAt exacto que
  * Firebase le asignó a la contraseña temporal. Si más adelante la cuenta
@@ -25,7 +25,7 @@ export async function createStaffAuthAccount(
   email: string,
   password: string,
 ): Promise<{ uid: string; tempPasswordSetAt: number | null }> {
-  const primaryConfig = getApp().options // reuses whatever config your app already initialized with
+  const primaryConfig = getApp().options // reutiliza la configuración con la que ya se inicializó la app
   const secondaryApp = initializeApp(primaryConfig, `staff-creation-${Date.now()}`)
   const secondaryAuth = getAuth(secondaryApp)
   try {
@@ -45,10 +45,18 @@ export async function createStaffAuthAccount(
 
 const PASSWORD_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
 
-export function generateRandomPassword(length = 10): string {
+// Usa crypto.getRandomValues (aleatoriedad criptográfica), no Math.random,
+// que es predecible y no sirve para generar contraseñas.
+export function generateRandomPassword(length = 12): string {
+  const chars = PASSWORD_CHARS.length
+  // Descarta los valores altos para que todos los caracteres tengan la misma probabilidad.
+  const limit = 256 - (256 % chars)
   let password = ''
-  for (let i = 0; i < length; i++) {
-    password += PASSWORD_CHARS[Math.floor(Math.random() * PASSWORD_CHARS.length)]
+  while (password.length < length) {
+    const bytes = crypto.getRandomValues(new Uint8Array(length * 2))
+    for (const byte of bytes) {
+      if (byte < limit && password.length < length) password += PASSWORD_CHARS[byte % chars]
+    }
   }
   return password
 }

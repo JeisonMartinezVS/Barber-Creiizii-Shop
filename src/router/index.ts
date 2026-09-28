@@ -51,10 +51,26 @@ const routes = [
         component: () => import('../Admin/AgendaView.vue'),
       },
       { path: 'reportes', name: 'reportes', component: () => import('../Admin/ReportView.vue') },
-      { path: 'clientes', name: 'clientes', component: () => import('../Admin/ClientsView.vue') },
-      { path: 'empleados', name: 'empleados', component: () => import('../Admin/EmpleadosView.vue') },
-      { path: 'productos', name: 'productos', component: () => import('../Admin/ProductsView.vue') },
-      { path: 'cortes', name: 'cortes', component: () => import('../Admin/CutsView.vue') },
+      // adminOnly: además de ocultarlas en el menú, el guard impide abrirlas por URL.
+      {
+        path: 'clientes',
+        name: 'clientes',
+        component: () => import('../Admin/ClientsView.vue'),
+        meta: { adminOnly: true },
+      },
+      {
+        path: 'empleados',
+        name: 'empleados',
+        component: () => import('../Admin/EmpleadosView.vue'),
+        meta: { adminOnly: true },
+      },
+      {
+        path: 'productos',
+        name: 'productos',
+        component: () => import('../Admin/ProductsView.vue'),
+        meta: { adminOnly: true },
+      },
+      { path: 'cortes', name: 'cortes', component: () => import('../Admin/CutsView.vue'), meta: { adminOnly: true } },
       { path: 'horarios', name: 'horarios', component: () => import('../Admin/TimeView.vue') },
     ],
   },
@@ -101,10 +117,9 @@ function waitForSection(hash: string, timeoutMs = 2000): Promise<Element | null>
   })
 }
 
-// Waits for Firebase's first onAuthStateChanged callback before deciding
-// anything. Without this, a hard refresh on /dashboard would see
-// authStore.user as null (Firebase hasn't responded yet) and bounce you to
-// /login even though you're actually logged in.
+// Espera la primera respuesta de onAuthStateChanged antes de decidir nada.
+// Sin esto, al recargar /dashboard authStore.user todavía sería null
+// (Firebase aún no respondió) y mandaría a /login aunque haya sesión abierta.
 function waitForAuthReady(authStore: ReturnType<typeof useAuthStore>): Promise<void> {
   if (authStore.isReady) return Promise.resolve()
   return new Promise((resolve) => {
@@ -134,6 +149,20 @@ router.beforeEach(async (to) => {
 
   if (requiresAuth && !authStore.user) {
     return { name: 'Login', query: { redirect: to.fullPath } }
+  }
+
+  // Sesión abierta pero sin rol válido (empleado desactivado o eliminado):
+  // se cierra la sesión en vez de dejarlo entrar al panel.
+  if (authStore.user && !authStore.role) {
+    await authStore.logout()
+    return to.name === 'Login' ? true : { name: 'Login' }
+  }
+
+  // Esto es solo la capa visual: la protección real de los datos son las
+  // reglas de seguridad de Firestore.
+  const adminOnly = to.matched.some((record) => record.meta.adminOnly)
+  if (adminOnly && !authStore.isAdmin) {
+    return { name: 'Agenda' }
   }
 
   if (to.name === 'Login' && authStore.user) {

@@ -3,7 +3,7 @@ defineProps<{
   label: string
   value: string
   icon: string
-  accent: string // tailwind-arbitrary hex, e.g. '#c9a24b'
+  accent: string // color hex, p. ej. '#c9a24b'
 }>()
 </script>
 

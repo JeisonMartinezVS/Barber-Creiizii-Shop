@@ -3,7 +3,7 @@ import { reactive } from 'vue'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from './firebase'
 
-// Configuración reactiva global (default values para evitar errores)
+// Configuración reactiva global (valores por defecto para evitar errores)
 export const globalConfig = reactive({
   titulo: 'Cargando...',
   color: '#000',

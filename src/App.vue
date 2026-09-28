@@ -28,8 +28,8 @@ const isAdminRoute = computed(() => route.meta.layout === 'admin')
 
     <Footer />
 
-    <!-- Global so Header's "Reservar" button works from any public page,
-         not just while Hero is mounted. -->
+    <!-- Global para que el botón "Reservar" del Header funcione en cualquier página pública,
+         no solo mientras el Hero está montado. -->
     <ModalReservation v-if="bookingStore.isOpen" />
   </template>
 
