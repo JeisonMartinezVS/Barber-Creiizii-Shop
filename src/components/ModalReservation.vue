@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
 import { formatCOP, formatLocalDate, STEPS, useBookingStore } from '../stores/booking'
 
 const store = useBookingStore()
+
+// Política de datos: se abre desde la casilla de autorización del paso "Datos".
+const LegalModal = defineAsyncComponent(() => import('./LegalModal.vue'))
+const privacyDoc = ref<import('../content/legal').LegalDoc | null>(null)
+async function openPrivacyPolicy() {
+  const { LEGAL_DOCS } = await import('../content/legal')
+  privacyDoc.value = LEGAL_DOCS.find((d) => d.id === 'privacidad') ?? null
+}
 
 const stepIcons: Record<string, string> = {
   Barbero: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>`,
@@ -45,12 +53,23 @@ const customDateInput = ref('')
 const customDateError = ref('')
 
 const minCustomDate = computed(() => formatLocalDate(new Date()))
+// Máximo de anticipación para reservar (firestore.rules acepta hasta 100 días).
+const MAX_DAYS_AHEAD = 90
+const maxCustomDate = computed(() => {
+  const d = new Date()
+  d.setDate(d.getDate() + MAX_DAYS_AHEAD)
+  return formatLocalDate(d)
+})
 
 function handleCustomDateChange() {
   customDateError.value = ''
   if (!customDateInput.value) return
   const [y, m, d] = customDateInput.value.split('-').map(Number)
   const picked = new Date(y!, m! - 1, d!)
+  if (customDateInput.value < minCustomDate.value || customDateInput.value > maxCustomDate.value) {
+    customDateError.value = `Puedes reservar desde hoy y hasta ${MAX_DAYS_AHEAD} días adelante.`
+    return
+  }
   if (!isDayEnabled(picked)) {
     customDateError.value = `${store.selectedBarbero?.name ?? 'El barbero'} no trabaja ese día. Elige otro.`
     return
@@ -371,7 +390,7 @@ async function handleCancelStored() {
               <p class="text-xs tracking-wide text-white/40 mb-3">ELIGE TU BARBERO</p>
               <div class="space-y-3">
                 <button
-                  v-for="barbero in store.barberos"
+                  v-for="barbero in store.bookableBarberos"
                   :key="barbero.id"
                   type="button"
                   class="w-full flex items-center justify-between px-4 py-3.5 rounded-xl border transition text-left"
@@ -506,6 +525,7 @@ async function handleCancelStored() {
                     v-model="customDateInput"
                     type="date"
                     :min="minCustomDate"
+                    :max="maxCustomDate"
                     class="bg-[#151515] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-primary/50"
                     @change="handleCustomDateChange"
                   />
@@ -576,45 +596,65 @@ async function handleCancelStored() {
 
               <div class="space-y-4">
                 <div>
-                  <label class="block text-xs tracking-wide text-white/40 mb-2">
+                  <label for="customer-name" class="block text-xs tracking-wide text-white/40 mb-2">
                     NOMBRE COMPLETO <span class="text-primary">*</span>
                   </label>
                   <input
+                    id="customer-name"
                     v-model="store.customer.name"
                     type="text"
+                    autocomplete="name"
+                    maxlength="80"
                     placeholder="Tu nombre completo"
                     class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50"
                   />
                 </div>
                 <div>
-                  <label class="block text-xs tracking-wide text-white/40 mb-2">
-                    TELÉFONO / WHATSAPP <span class="text-primary">*</span>
+                  <label for="customer-phone" class="block text-xs tracking-wide text-white/40 mb-2">
+                    CELULAR / WHATSAPP <span class="text-primary">*</span>
                   </label>
                   <input
+                    id="customer-phone"
                     v-model="store.customer.phone"
                     type="tel"
+                    inputmode="tel"
+                    autocomplete="tel"
+                    maxlength="20"
                     placeholder="+57 300 000 0000"
                     class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50"
                   />
+                  <p
+                    v-if="store.customer.phone.trim() && !store.isPhoneValid"
+                    class="text-xs text-red-400 mt-1.5"
+                  >
+                    Escribe un número válido (solo números, espacios, +, guiones o paréntesis).
+                  </p>
                 </div>
-                <div>
-                  <label class="block text-xs tracking-wide text-white/40 mb-2">CORREO (OPCIONAL)</label>
+
+                <!-- Autorización de tratamiento de datos (Ley 1581 de 2012, art. 9). Viene
+                     marcada; se otorga al confirmar la reserva con la casilla marcada. -->
+                <label class="flex items-start gap-3 cursor-pointer select-none">
                   <input
-                    v-model="store.customer.email"
-                    type="email"
-                    placeholder="tu@email.com"
-                    class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50"
+                    v-model="store.acceptedPrivacy"
+                    type="checkbox"
+                    class="mt-0.5 w-4 h-4 shrink-0 accent-[#c9a24b]"
                   />
-                </div>
-                <div>
-                  <label class="block text-xs tracking-wide text-white/40 mb-2">NOTAS (OPCIONAL)</label>
-                  <textarea
-                    v-model="store.customer.notes"
-                    rows="3"
-                    placeholder="Alguna indicación especial..."
-                    class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-primary/50 resize-none"
-                  ></textarea>
-                </div>
+                  <span class="text-xs text-white/60 leading-relaxed">
+                    Al confirmar la reserva autorizo a Barber Creiizii a tratar mi nombre y mi celular para
+                    gestionar esta cita y contactarme sobre ella, según la
+                    <button
+                      type="button"
+                      class="text-primary underline underline-offset-2 hover:opacity-80"
+                      @click.prevent="openPrivacyPolicy"
+                    >
+                      política de tratamiento de datos</button
+                    >.
+                  </span>
+                </label>
+                <p v-if="!store.acceptedPrivacy" class="text-xs text-red-400 -mt-2">
+                  Sin esta autorización no podemos agendar tu cita en línea. También puedes reservar por
+                  WhatsApp.
+                </p>
               </div>
             </template>
 
@@ -754,4 +794,6 @@ async function handleCancelStored() {
       </div>
     </div>
   </Teleport>
+
+  <LegalModal v-if="privacyDoc" :doc="privacyDoc" @close="privacyDoc = null" />
 </template>

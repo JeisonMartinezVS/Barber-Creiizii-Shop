@@ -1,5 +1,6 @@
 // Funciones de los SDK de Firebase que usa la app
 import { initializeApp } from 'firebase/app'
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check'
 import { getFirestore } from 'firebase/firestore'
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -17,6 +18,24 @@ const firebaseConfig = {
 
 // Inicializa Firebase
 export const app = initializeApp(firebaseConfig)
+
+// App Check (reCAPTCHA v3): certifica que las peticiones a Firestore vienen de
+// este sitio y no de un script o bot, lo que frena la creación masiva de
+// reservas falsas. Solo se activa si existe VITE_RECAPTCHA_SITE_KEY; después
+// hay que "aplicarlo" (enforce) para Firestore en la consola de Firebase.
+// Debe inicializarse antes de usar Firestore.
+const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined
+if (recaptchaSiteKey) {
+  if (import.meta.env.DEV) {
+    // En desarrollo genera un token de depuración (se registra en la consola).
+    ;(self as unknown as { FIREBASE_APPCHECK_DEBUG_TOKEN: boolean }).FIREBASE_APPCHECK_DEBUG_TOKEN = true
+  }
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(recaptchaSiteKey),
+    isTokenAutoRefreshEnabled: true,
+  })
+}
+
 export const db = getFirestore(app)
 // Firebase Auth vive en ./firebaseAuth.ts: solo lo usa el panel (/login y
 // /dashboard), así el sitio público no descarga el SDK de autenticación.

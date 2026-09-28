@@ -113,9 +113,9 @@ Barber-Creiizii-Shop/
 
 | Colección | Contenido | Datos personales |
 | --- | --- | :---: |
-| `citas` | Reservas: barbero, servicio, fecha/hora, total, estado y datos del cliente (nombre, teléfono, correo, notas). | ⚠️ Sí |
-| `disponibilidad` | Un documento por franja horaria ocupada, para evitar reservas dobles. | No |
-| `empleados` | Ficha del personal: `name`, `email`, `phone`, `username`, `role`, `active`, `mustChangePassword`, `tempPasswordSetAt`. El ID del documento es el UID de Firebase Auth. | ⚠️ Sí |
+| `citas` | Reservas: barbero, servicio, fecha/hora, total, estado, datos del cliente (**solo nombre y celular**) y registro de la autorización (`privacyConsent`, `privacyPolicyVersion`, `createdAt`). Lectura pública solo por ID; nadie externo puede listarlas. | ⚠️ Sí |
+| `disponibilidad` | Un documento por horario ocupado (`barberoId_fecha_hora`) enlazado a su cita (`citaId`). Evita reservas dobles. | No |
+| `empleados` | Ficha del personal: `name`, `email`, `phone`, `username`, `role`, `active`, `schedule`, `mustChangePassword`, `tempPasswordSetAt`. El ID del documento es el UID de Firebase Auth. **Lectura pública** (el modal de reservas lee aquí barberos y horarios); solo el admin escribe, y cada empleado solo su propio `schedule`. | ⚠️ Sí |
 | `productos` | Catálogo de productos. | No |
 | `config` | Servicios, categorías, precios y configuración general. | No |
 
@@ -126,9 +126,10 @@ Barber-Creiizii-Shop/
 - El rol se guarda en Firestore (`empleados/{uid}.role`), no en *custom claims*.
 - `admin`: acceso completo al panel.
 - `empleado`: solo Agenda, Reportes (propios) y Horarios.
+- Un empleado **desactivado** (`active: false`) o **eliminado** no puede entrar al panel ni leer datos, aunque su cuenta de Firebase Auth siga existiendo.
 
 > [!WARNING]
-> Ocultar opciones del menú es solo visual. **La protección real la dan las reglas de seguridad de Firestore**, que hoy se administran en la consola de Firebase y **no están versionadas en este repositorio**. Ver [Pendientes conocidos](#pendientes-conocidos).
+> Ocultar opciones del menú es solo visual. **La protección real la dan las reglas de seguridad de Firestore**, versionadas en [`firestore.rules`](firestore.rules). Como cualquiera puede crear una cuenta de Firebase Auth con la API key pública, las reglas **nunca** confían solo en `request.auth != null`: validan el rol y el estado activo en `empleados/{uid}`.
 
 ---
 
@@ -177,6 +178,10 @@ VITE_ADMIN_EMAIL_DOMAIN=creiizii-admin.internal
 # Muestra accesos rápidos de prueba en el login. Debe ser "false" en producción.
 VITE_SHOW_DEMO_ACCOUNTS=false
 
+# Clave de sitio de reCAPTCHA v3 para Firebase App Check (protección contra bots).
+# Si está vacía, App Check no se activa.
+VITE_RECAPTCHA_SITE_KEY=
+
 ```
 
 > [!NOTE]
@@ -209,6 +214,30 @@ VITE_SHOW_DEMO_ACCOUNTS=false
 
 **SEO:** el build genera `robots.txt` y `sitemap.xml` para `https://www.creiizii.com` (ver `vite.config.ts`). Las metaetiquetas base y los datos estructurados (`BarberShop`, schema.org) están en `index.html`, y el título y la descripción de cada ruta en `src/router/seo.ts`.
 
+### Reglas de Firestore
+
+```sh
+npm install -g firebase-tools   # una sola vez
+firebase login
+firebase deploy --only firestore:rules
+```
+
+> [!IMPORTANT]
+> **Orden al publicar estas reglas por primera vez:** primero desplegar el sitio en Vercel y **después** publicar las reglas. El código nuevo funciona con las reglas anteriores, pero el código anterior no cumple las reglas nuevas (guardaba la cita y el horario por separado).
+
+### App Check (protección contra bots)
+
+1. Crear una clave **reCAPTCHA v3** para `www.creiizii.com` en la [consola de reCAPTCHA](https://www.google.com/recaptcha/admin).
+2. En Firebase > **App Check**, registrar la app web con el proveedor reCAPTCHA v3 (clave secreta).
+3. Poner la clave de sitio en `VITE_RECAPTCHA_SITE_KEY` (Vercel) y desplegar.
+4. Revisar en App Check > Métricas que las peticiones llegan verificadas y luego **aplicar (enforce) solo para Cloud Firestore**. No aplicarlo a Authentication: la creación de empleados desde el panel dejaría de funcionar.
+
+En desarrollo local, App Check imprime un *debug token* en la consola del navegador; se registra en App Check > Administrar tokens de depuración.
+
+### Cabeceras de seguridad
+
+`vercel.json` añade cabeceras HTTP de seguridad (anti-clickjacking, `nosniff`, HSTS, `Referrer-Policy`, `Permissions-Policy`). La **Content Security Policy** está en modo *Report-Only*: tras desplegar, revisar la consola del navegador en todas las páginas. Si no aparecen avisos de CSP, cambiar la clave `Content-Security-Policy-Report-Only` por `Content-Security-Policy` para aplicarla.
+
 ### Cloud Functions (Firebase)
 
 ```sh
@@ -223,9 +252,14 @@ npm run deploy   # firebase deploy --only functions (requiere Firebase CLI y pla
 
 - **Credenciales:** `.env` y las llaves de cuentas de servicio (`firebase-admin`) nunca se suben al repositorio.
 - **Contraseñas temporales:** se generan al crear un empleado, se envían por WhatsApp y el sistema obliga a cambiarlas en el primer ingreso.
-- **Datos de clientes:** la colección `citas` contiene datos personales. El sitio público no debe tener permiso de lectura sobre ella.
-- **Cuentas demo:** `VITE_SHOW_DEMO_ACCOUNTS` debe estar en `false` en producción.
+- **Datos de clientes:** solo nombre y celular. El sitio público puede crear citas válidas y leer una cita por su ID (aleatorio, solo lo conoce quien reservó), pero **no listar** la colección.
+- **Reservas atómicas:** la cita y su horario se guardan en un solo lote; las reglas verifican que coincidan, que el horario esté libre, el formato y el tamaño de cada campo y que la fecha esté entre ahora y 100 días. Liberar un horario exige que su cita quede cancelada en el mismo lote.
+- **Datos del personal:** `empleados` es de lectura pública porque el modal de reservas necesita la lista de barberos y sus horarios. Eso deja visibles el correo y el celular del personal a quien inspeccione las peticiones de red; es un riesgo aceptado. Si en el futuro se quiere ocultar, la solución es un directorio público aparte con solo nombre, rol y horario.
+- **Contraseñas temporales:** se generan con `crypto.getRandomValues`, se envían por WhatsApp y el sistema obliga a cambiarlas en el primer ingreso.
+- **Bajas de personal:** al eliminar o desactivar un empleado pierde el acceso de inmediato. Aun así, conviene **deshabilitar su cuenta** en Firebase > Authentication > Usuarios.
+- **Cuentas demo:** `VITE_SHOW_DEMO_ACCOUNTS` debe estar en `false` en producción (con `false`, la lista de usuarios de prueba ni siquiera se incluye en el build).
 - **Creación de cuentas:** se hace desde el navegador del administrador con una instancia secundaria de Firebase, para no cerrar su sesión (`src/lib/createStaffAccount.ts`).
+- **Recomendado en la consola:** activar la *protección contra la enumeración de correos* en Firebase Authentication y una **alerta de presupuesto** en Google Cloud Billing.
 
 ---
 
@@ -236,9 +270,9 @@ El sitio publica sus documentos legales en el footer. Cada uno se abre en un mod
 | Documento | Contenido principal |
 | --- | --- |
 | **Términos y condiciones** | Uso del sitio, precios, propiedad intelectual, servicios de terceros, responsabilidad y ley aplicable. |
-| **Política de tratamiento de datos personales** | Responsable, datos recolectados, finalidades, encargados, derechos del titular (habeas data) y cómo ejercerlos. |
-| **Política de reservas y cancelaciones** | Confirmación, puntualidad, cancelaciones, inasistencias y pagos. |
-| **Política de cookies y almacenamiento** | Uso de `localStorage`, almacenamiento técnico de Firebase Auth y cookies de terceros (Google Maps). |
+| **Política de tratamiento de datos personales** | Responsable, datos recolectados (solo nombre y celular) y no recolectados, finalidades, autorización, encargados, derechos del titular (habeas data), conservación (24 meses) y seguridad. |
+| **Política de reservas y cancelaciones** | Confirmación, anticipación, puntualidad, cancelaciones, inasistencias y pagos. |
+| **Política de cookies y almacenamiento** | Uso de `localStorage`, almacenamiento técnico de Firebase Auth y cookies de terceros (Google Maps y Google reCAPTCHA). |
 | **Aviso sobre el uso de IA** | Transparencia sobre el desarrollo asistido por IA. |
 
 ### Marco normativo de referencia (Colombia)
@@ -246,7 +280,11 @@ El sitio publica sus documentos legales en el footer. Cada uno se abre en un mod
 - **Ley 1581 de 2012**: protección de datos personales (habeas data).
 - **Decreto 1377 de 2013**, compilado en el **Decreto 1074 de 2015**: reglamentación del tratamiento de datos.
 - **Ley 1480 de 2011**: Estatuto del Consumidor.
+- **Ley 527 de 1999**: validez de los mensajes de datos (aceptación electrónica).
+- **Ley 2300 de 2023**: canales y horarios permitidos para contactar a los consumidores.
 - Autoridad de control: **Superintendencia de Industria y Comercio (SIC)**.
+
+**Autorización del cliente:** el formulario de reserva exige marcar una casilla de autorización con enlace a la política. Cada cita guarda `privacyConsent`, `privacyPolicyVersion` (ver `src/content/legalVersion.ts`) y la fecha (`createdAt`) como prueba.
 
 ### Encargados del tratamiento (terceros)
 
@@ -254,6 +292,7 @@ El sitio publica sus documentos legales en el footer. Cada uno se abre en un mod
 | --- | --- |
 | Vercel Inc. | Hosting del sitio web |
 | Google LLC (Firebase) | Base de datos, autenticación y funciones en la nube |
+| Google LLC (reCAPTCHA) | Verificación contra bots (App Check) |
 | Google LLC (Maps) | Mapa de ubicación embebido |
 | Meta Platforms, Inc. | WhatsApp e Instagram (contacto iniciado por el usuario) |
 
@@ -263,10 +302,10 @@ Los servidores de estos proveedores pueden estar fuera de Colombia (transmisión
 > Los textos legales son una base redactada con asistencia de IA y **no constituyen asesoría jurídica**. Antes de considerarlos definitivos, un abogado debe revisarlos. Pendientes:
 > - Completar NIT o cédula del titular y un correo de contacto en `BUSINESS` (`src/content/legal.ts`).
 > - Validar con el negocio las reglas de cancelación (antelación y tolerancia de llegada).
-> - Añadir al formulario de reserva una casilla de **autorización expresa** para el tratamiento de datos, y guardar esa aceptación con la cita (Ley 1581, art. 9).
-> - Evaluar si aplica la inscripción en el Registro Nacional de Bases de Datos (RNBD) de la SIC.
+> - **Cumplir el plazo de conservación de 24 meses:** hoy la eliminación es manual (el admin borra las citas antiguas). Puede automatizarse con una Cloud Function programada.
+> - Evaluar si aplica la inscripción en el Registro Nacional de Bases de Datos (RNBD) de la SIC (obligatoria solo para sociedades y entidades sin ánimo de lucro con activos superiores a 100.000 UVT).
 >
-> Para actualizar un documento, edita `src/content/legal.ts` y cambia `LEGAL_UPDATED_AT`.
+> Para actualizar un documento, edita `src/content/legal.ts` y cambia `LEGAL_UPDATED_AT`. Si el cambio en la política de datos es de fondo, cambia también `PRIVACY_POLICY_VERSION`.
 
 ---
 
@@ -286,8 +325,9 @@ Un **gran porcentaje del código, del diseño y de los textos** de este proyecto
 
 ## Pendientes conocidos
 
-- [ ] **Reglas de Firestore versionadas:** hoy solo existen en la consola de Firebase. Conviene agregar `firestore.rules` al repositorio y desplegarlas con `firebase deploy --only firestore:rules`.
-- [ ] **Cloud Function `getBookedTimes`:** está escrita en `functions/src/getBookedTimes.ts`, pero no se exporta desde `functions/src/index.ts`, así que no se despliega.
+- [ ] **Cloud Function `getBookedTimes`:** está escrita en `functions/src/getBookedTimes.ts`, pero no se exporta ni se usa (el sitio consulta `disponibilidad`). Puede eliminarse.
+- [ ] **Reportes:** `ReportView` escucha en vivo **toda** la colección `citas`. Con los años (o ante abuso) crece el costo y la carga del panel; conviene limitarla por rango de fechas.
+- [ ] **Dependencias de `functions/`:** `npm audit` reporta 8 vulnerabilidades moderadas que requieren actualizar `firebase-admin` a una versión mayor.
 - [ ] **Horario del footer:** está fijo en `Footer.vue`. Debería leerse del mismo documento de Firestore que usa la vista Horarios.
 - [ ] **Mapa del footer:** reemplazar la URL de ejemplo por el enlace real de *Google Maps > Compartir > Insertar un mapa*.
 - [ ] **Script `scripts/setAdminClaim`:** es de una etapa anterior en la que los roles usaban *custom claims*. Los roles ya se leen de Firestore.

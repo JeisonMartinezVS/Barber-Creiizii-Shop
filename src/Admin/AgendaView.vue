@@ -152,9 +152,13 @@ function toggleMenu(id: string) {
 function closeMenu() {
   openMenuId.value = null
 }
-document.addEventListener('click', (e) => {
+// Se registra al montar y se quita al salir de la vista (antes se acumulaba un
+// listener nuevo cada vez que se abría la agenda).
+function onDocumentClick(e: MouseEvent) {
   if (!(e.target as HTMLElement).closest('[data-acciones-menu]')) closeMenu()
-})
+}
+onMounted(() => document.addEventListener('click', onDocumentClick))
+onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 
 async function releaseSlot(cita: Cita) {
   await setDoc(

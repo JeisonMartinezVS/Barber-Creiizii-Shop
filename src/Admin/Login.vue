@@ -15,11 +15,15 @@ const formError = ref('')
 // pruebas durante el desarrollo, no para el sitio publicado.
 const showDemoAccounts = import.meta.env.VITE_SHOW_DEMO_ACCOUNTS === 'true'
 
-const demoAccounts = [
-  { label: 'Admin', username: 'admin' },
-  { label: 'Yeison', username: 'yeison' },
-  { label: 'Camilo', username: 'camilo' },
-]
+// Con la bandera apagada el build elimina esta lista: los usuarios reales no
+// quedan expuestos en el JavaScript público.
+const demoAccounts = showDemoAccounts
+  ? [
+      { label: 'Admin', username: 'admin' },
+      { label: 'Yeison', username: 'yeison' },
+      { label: 'Camilo', username: 'camilo' },
+    ]
+  : []
 
 // Solo rellena el usuario, nunca la contraseña: siempre hay que escribirla,
 // así que en este archivo no hay nada sensible.

@@ -46,7 +46,7 @@ watch(
         <div
           class="bg-[#0e0e0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]"
         >
-          <!-- Header -->
+          <!-- Encabezado -->
           <div class="flex items-start justify-between gap-4 px-6 pt-5 pb-4 border-b border-white/10 shrink-0">
             <div>
               <h2 :id="`legal-title-${doc.id}`" class="font-serif text-xl font-bold text-white">
@@ -86,10 +86,17 @@ watch(
                   <span>{{ item }}</span>
                 </li>
               </ul>
+              <p
+                v-for="(paragraph, i) in section.closing"
+                :key="`closing-${i}`"
+                class="text-white/60 mt-2"
+              >
+                {{ paragraph }}
+              </p>
             </section>
           </div>
 
-          <!-- Footer -->
+          <!-- Pie -->
           <div class="px-6 py-4 border-t border-white/10 flex justify-end shrink-0">
             <button
               type="button"

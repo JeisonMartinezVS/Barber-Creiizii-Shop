@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref } from 'vue'
 import {
-  addDoc,
   collection,
   doc,
   getDoc,
@@ -10,17 +9,19 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
   Timestamp,
-  updateDoc,
   where,
+  writeBatch,
+  type DocumentReference,
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
+import { PRIVACY_POLICY_VERSION } from '../content/legalVersion'
 
 export interface Barbero {
   id: string
   name: string
   role: string
+  active: boolean
 }
 
 export interface ServiceItem {
@@ -106,11 +107,21 @@ function readStoredBooking(): StoredBooking | null {
     return null
   }
 }
+// localStorage puede no estar disponible (modo privado o bloqueado): la cita
+// ya quedó guardada en Firestore, así que un fallo aquí no debe romper nada.
 function writeStoredBooking(booking: StoredBooking) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(booking))
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(booking))
+  } catch {
+    // Sin almacenamiento local: solo se pierde el recordatorio de la cita.
+  }
 }
 function clearStoredBooking() {
-  localStorage.removeItem(STORAGE_KEY)
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // Igual que arriba.
+  }
 }
 
 // Forma de los servicios guardados en `config.services`, la misma que
@@ -152,29 +163,34 @@ export const useBookingStore = defineStore('booking', () => {
   const submitError = ref<string | null>(null)
   const currentStepIndex = ref(0)
 
-  // Barberos = staff activo (admin + empleados), en vivo desde Firestore —
-  // ya no es una lista quemada. Se arranca una sola vez, igual que products.
+  // Barberos = personal (admin + empleados) en vivo desde /empleados. Solo se
+  // toman id, nombre, rol y si está activo; nunca se registran los documentos
+  // en consola (incluyen correo y celular). Incluye inactivos para que el
+  // panel siga mostrando el nombre en citas antiguas; para reservar se usa
+  // bookableBarberos.
   const barberos = ref<Barbero[]>([])
 
   onSnapshot(
-  collection(db, 'empleados'),
+    collection(db, 'empleados'),
     (snapshot) => {
-    // Solo se toman id, nombre y rol. No registrar los documentos en consola:
-    // incluyen correo y teléfono del personal y cualquier visitante los vería.
-    barberos.value = snapshot.docs
-      .map((d) => {
-        const data = d.data()
-
-        return {
-          id: d.id,
-          name: data.name,
-          role: data.role === 'admin' ? 'Propietario' : 'Barbero',
-        } as Barbero
-      })
-      .sort((a, b) => a.name.localeCompare(b.name))
+      barberos.value = snapshot.docs
+        .map((d) => {
+          const data = d.data()
+          return {
+            id: d.id,
+            name: String(data.name ?? ''),
+            role: data.role === 'admin' ? 'Propietario' : 'Barbero',
+            active: data.active !== false,
+          } as Barbero
+        })
+        .filter((b) => b.name)
+        .sort((a, b) => a.name.localeCompare(b.name))
     },
-  (err) => console.error('No se pudieron cargar los empleados', err),
+    (err) => console.error('No se pudieron cargar los empleados', err),
   )
+
+  // Solo los barberos activos se pueden elegir al reservar.
+  const bookableBarberos = computed(() => barberos.value.filter((b) => b.active))
 
   // Los precios ahora son UNOS SOLOS para todos los barberos — los pone el
   // admin en config.services (ya no viven en empleados/{uid}). Se cargan
@@ -214,12 +230,16 @@ export const useBookingStore = defineStore('booking', () => {
   const selectedTime = ref<string | null>(null)
   const selectedProductIds = ref<Set<string>>(new Set())
 
+  // Solo se piden nombre y celular (minimización de datos, Ley 1581).
   const customer = reactive({
     name: '',
     phone: '',
-    email: '',
-    notes: '',
   })
+  // Autorización para el tratamiento de datos. La casilla viene marcada por
+  // defecto; la autorización se otorga al confirmar la reserva con ella
+  // marcada (conducta inequívoca, Decreto 1377 de 2013, art. 7). Si la persona
+  // la desmarca, no se puede reservar en línea.
+  const acceptedPrivacy = ref(true)
 
   const lastCreatedCitaId = ref<string | null>(null)
 
@@ -234,7 +254,7 @@ export const useBookingStore = defineStore('booking', () => {
   const currentStep = computed<StepName>(() => STEPS[currentStepIndex.value] ?? STEPS[0])
 
   const selectedBarbero = computed(
-    () => barberos.value.find((b) => b.id === selectedBarberoId.value) ?? null,
+    () => bookableBarberos.value.find((b) => b.id === selectedBarberoId.value) ?? null,
   )
 
   const allServices = computed(() => serviceCategories.value.flatMap((category) => category.items))
@@ -253,9 +273,13 @@ export const useBookingStore = defineStore('booking', () => {
   })
 
   const isFechaValid = computed(() => !!selectedDate.value && !!selectedTime.value)
-  const isDatosValid = computed(
-    () => customer.name.trim().length > 0 && customer.phone.trim().length > 0,
-  )
+  // Mismos límites que valida firestore.rules para las citas.
+  const isNameValid = computed(() => {
+    const name = customer.name.trim()
+    return name.length >= 2 && name.length <= 80
+  })
+  const isPhoneValid = computed(() => /^[0-9+() -]{7,20}$/.test(customer.phone.trim()))
+  const isDatosValid = computed(() => isNameValid.value && isPhoneValid.value && acceptedPrivacy.value)
 
   // El horario SÍ sigue siendo propio de cada barbero — esto no cambió.
   const selectedBarberoSchedule = ref<DaySchedule[]>(defaultSchedule())
@@ -350,8 +374,7 @@ export const useBookingStore = defineStore('booking', () => {
     bookedTimes.value = []
     customer.name = ''
     customer.phone = ''
-    customer.email = ''
-    customer.notes = ''
+    acceptedPrivacy.value = true
   }
 
   function goToStep(index: number) {
@@ -394,92 +417,112 @@ export const useBookingStore = defineStore('booking', () => {
       submitError.value = 'Falta información para completar la reserva.'
       return
     }
+    if (!isDatosValid.value) {
+      submitError.value = 'Revisa tu nombre, tu celular y la autorización de datos.'
+      goToStep(STEPS.indexOf('Datos'))
+      return
+    }
 
     isSubmitting.value = true
     submitError.value = null
 
     const dateTime = combineDateAndTime(selectedDate.value, selectedTime.value)
     const dateStr = formatLocalDate(dateTime)
-    const slotId = getSlotId(selectedBarbero.value.id, dateStr, selectedTime.value)
+    const time = selectedTime.value
+    const barbero = selectedBarbero.value
+    const service = selectedService.value
+    const slotId = getSlotId(barbero.id, dateStr, time)
+
+    // La cita y su horario se guardan en UN solo lote atómico: o se guardan
+    // las dos o ninguna. Las reglas de Firestore validan que coincidan y que el
+    // horario esté libre, así nadie puede ocupar horarios sin una cita real
+    // ni se producen reservas dobles.
+    const citaRef = doc(collection(db, 'citas'))
+    const batch = writeBatch(db)
+    batch.set(doc(db, 'disponibilidad', slotId), {
+      barberoId: barbero.id,
+      date: dateStr,
+      time,
+      status: 'pendiente',
+      citaId: citaRef.id,
+    })
+    batch.set(citaRef, {
+      barberoId: barbero.id,
+      barberoName: barbero.name,
+      serviceId: service.id,
+      serviceName: service.name,
+      serviceDuration: service.duration,
+      servicePrice: service.price,
+      products: selectedProducts.value.map((p) => ({ id: p.id, name: p.name, price: p.price })),
+      total: total.value,
+      dateTime: Timestamp.fromDate(dateTime),
+      date: dateStr,
+      time,
+      customerName: customer.name.trim(),
+      customerPhone: customer.phone.trim(),
+      status: 'pendiente',
+      createdAt: serverTimestamp(),
+      privacyConsent: true,
+      privacyPolicyVersion: PRIVACY_POLICY_VERSION,
+    })
 
     try {
-      try {
-        await setDoc(doc(db, 'disponibilidad', slotId), {
-          barberoId: selectedBarbero.value.id,
-          date: dateStr,
-          time: selectedTime.value,
-          status: 'pendiente',
-        })
-      } catch {
-        submitError.value = 'Ese horario ya no está disponible. Por favor elige otro.'
-        await fetchBookedTimes()
-        goToStep(STEPS.indexOf('Fecha'))
-        return
-      }
-
-      let docRef
-      try {
-        docRef = await addDoc(collection(db, 'citas'), {
-          barberoId: selectedBarbero.value.id,
-          barberoName: selectedBarbero.value.name,
-          serviceId: selectedService.value.id,
-          serviceName: selectedService.value.name,
-          serviceDuration: selectedService.value.duration,
-          servicePrice: selectedService.value.price,
-          products: selectedProducts.value.map((p) => ({ id: p.id, name: p.name, price: p.price })),
-          total: total.value,
-          dateTime: Timestamp.fromDate(dateTime),
-          date: dateStr,
-          time: selectedTime.value,
-          customerName: customer.name.trim(),
-          customerPhone: customer.phone.trim(),
-          customerEmail: customer.email.trim(),
-          customerNotes: customer.notes.trim(),
-          status: 'pendiente',
-          createdAt: serverTimestamp(),
-        })
-      } catch (citaErr) {
-        await setDoc(doc(db, 'disponibilidad', slotId), { status: 'cancelada' }, { merge: true }).catch(() => {})
-        throw citaErr
-      }
-
-      lastCreatedCitaId.value = docRef.id
-      isConfirmed.value = true
-
-      const record: StoredBooking = {
-        citaId: docRef.id,
-        customerName: customer.name.trim(),
-        barberoName: selectedBarbero.value.name,
-        serviceName: selectedService.value.name,
-        serviceDuration: selectedService.value.duration,
-        dateTimeISO: dateTime.toISOString(),
-        time: selectedTime.value,
-        total: total.value,
-        status: 'pendiente',
-      }
-      writeStoredBooking(record)
-      storedBooking.value = record
+      await batch.commit()
     } catch (err) {
       console.error('No se pudo guardar la cita', err)
-      submitError.value = 'No se pudo guardar tu cita. Intenta de nuevo o escríbenos por WhatsApp.'
-    } finally {
+      // Si el horario ya aparece ocupado, alguien lo tomó primero.
+      await fetchBookedTimes()
+      if (bookedTimes.value.includes(time)) {
+        submitError.value = 'Ese horario ya no está disponible. Por favor elige otro.'
+        goToStep(STEPS.indexOf('Fecha'))
+      } else {
+        submitError.value = 'No se pudo guardar tu cita. Intenta de nuevo o escríbenos por WhatsApp.'
+      }
       isSubmitting.value = false
+      return
     }
+
+    lastCreatedCitaId.value = citaRef.id
+    isConfirmed.value = true
+
+    const record: StoredBooking = {
+      citaId: citaRef.id,
+      customerName: customer.name.trim(),
+      barberoName: barbero.name,
+      serviceName: service.name,
+      serviceDuration: service.duration,
+      dateTimeISO: dateTime.toISOString(),
+      time,
+      total: total.value,
+      status: 'pendiente',
+    }
+    writeStoredBooking(record)
+    storedBooking.value = record
+    isSubmitting.value = false
   }
 
   async function cancelBooking(citaId: string): Promise<boolean> {
     isCancelling.value = true
     try {
-      const citaSnap = await getDoc(doc(db, 'citas', citaId))
+      const citaRef = doc(db, 'citas', citaId)
+      const citaSnap = await getDoc(citaRef)
       if (!citaSnap.exists()) return false
       const cita = citaSnap.data() as { barberoId: string; date: string; time: string }
 
-      await updateDoc(doc(db, 'citas', citaId), { status: 'cancelada' })
-      await setDoc(
-        doc(db, 'disponibilidad', getSlotId(cita.barberoId, cita.date, cita.time)),
-        { status: 'cancelada' },
-        { merge: true },
-      )
+      // Cancela la cita y libera su horario en el mismo lote: las reglas solo
+      // permiten liberar un horario si su cita queda cancelada a la vez.
+      const batch = writeBatch(db)
+      batch.update(citaRef, { status: 'cancelada' })
+      batch.update(doc(db, 'disponibilidad', getSlotId(cita.barberoId, cita.date, cita.time)), {
+        status: 'cancelada',
+      })
+      try {
+        await batch.commit()
+      } catch {
+        // Citas antiguas sin horario enlazado: se cancela solo la cita y el
+        // personal libera el horario desde la agenda.
+        await cancelCitaOnly(citaRef)
+      }
 
       if (storedBooking.value?.citaId === citaId) {
         storedBooking.value = null
@@ -495,6 +538,12 @@ export const useBookingStore = defineStore('booking', () => {
     }
   }
 
+  async function cancelCitaOnly(citaRef: DocumentReference) {
+    const batch = writeBatch(db)
+    batch.update(citaRef, { status: 'cancelada' })
+    await batch.commit()
+  }
+
   return {
     isOpen,
     isConfirmed,
@@ -503,6 +552,7 @@ export const useBookingStore = defineStore('booking', () => {
     currentStepIndex,
     currentStep,
     barberos,
+    bookableBarberos,
     serviceCategories,
     isLoadingServices,
     selectedBarberoSchedule,
@@ -513,6 +563,9 @@ export const useBookingStore = defineStore('booking', () => {
     selectedTime,
     selectedProductIds,
     customer,
+    acceptedPrivacy,
+    isNameValid,
+    isPhoneValid,
     lastCreatedCitaId,
     storedBooking,
     showStoredBooking,
