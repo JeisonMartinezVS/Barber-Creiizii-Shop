@@ -2,6 +2,15 @@
 import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore'
 import { db } from '../config/firebase'
+import { LOW_STOCK_THRESHOLD } from '../stores/booking'
+
+// Imágenes de productos DESACTIVADAS: Firebase Cloud Storage requiere el plan
+// Blaze. Para activarlas: habilitar Storage en la consola, publicar sus reglas
+// y cambiar esto a true. Mientras esté en false, el producto se guarda sin
+// imagen y el código de Storage ni siquiera se descarga.
+const PRODUCT_IMAGES_ENABLED = false
+const ACCEPTED_IMAGE_TYPES = 'image/jpeg,image/png,image/webp'
+const loadImageTools = () => import('../lib/productImages')
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
 import ToggleSwitch from '../ui/ToggleSwitch.vue'
 
@@ -13,6 +22,8 @@ interface Producto {
   stock: number
   description: string
   active: boolean
+  image?: string // URL pública de la imagen (Cloud Storage)
+  imagePath?: string // ruta en Cloud Storage, para borrarla al reemplazarla
 }
 
 const productos = ref<Producto[]>([])
@@ -40,6 +51,53 @@ const form = reactive({
   description: '',
 })
 
+// --- Imagen del producto ---------------------------------------------------
+const imageFile = ref<File | null>(null) // archivo nuevo elegido (aún sin subir)
+const imagePreview = ref('') // lo que se muestra en el formulario
+const currentImage = ref<{ url: string; path: string } | null>(null) // la que ya tiene guardada
+const removeCurrentImage = ref(false)
+const imageInput = ref<HTMLInputElement | null>(null)
+
+function clearPreviewUrl() {
+  if (imagePreview.value.startsWith('blob:')) URL.revokeObjectURL(imagePreview.value)
+}
+
+function resetImage() {
+  clearPreviewUrl()
+  imageFile.value = null
+  imagePreview.value = ''
+  currentImage.value = null
+  removeCurrentImage.value = false
+  if (imageInput.value) imageInput.value.value = ''
+}
+
+async function onImageSelected(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  const { validateImageFile } = await loadImageTools()
+  const error = validateImageFile(file)
+  if (error) {
+    formError.value = error
+    ;(event.target as HTMLInputElement).value = ''
+    return
+  }
+  formError.value = ''
+  clearPreviewUrl()
+  imageFile.value = file
+  imagePreview.value = URL.createObjectURL(file)
+  removeCurrentImage.value = false
+}
+
+function removeImage() {
+  clearPreviewUrl()
+  imageFile.value = null
+  imagePreview.value = ''
+  if (currentImage.value) removeCurrentImage.value = true
+  if (imageInput.value) imageInput.value.value = ''
+}
+
+onUnmounted(clearPreviewUrl)
+
 function resetForm() {
   form.name = ''
   form.brand = ''
@@ -47,6 +105,7 @@ function resetForm() {
   form.stock = ''
   form.description = ''
   formError.value = ''
+  resetImage()
 }
 
 function openCreateForm() {
@@ -62,6 +121,11 @@ function openEditForm(producto: Producto) {
   form.stock = String(producto.stock)
   form.description = producto.description
   formError.value = ''
+  resetImage()
+  if (producto.image) {
+    currentImage.value = { url: producto.image, path: producto.imagePath ?? '' }
+    imagePreview.value = producto.image
+  }
   isFormOpen.value = true
 }
 function closeForm() {
@@ -95,15 +159,38 @@ async function saveProduct() {
       stock,
       description: String(form.description).trim(),
     }
-    if (editingId.value) {
-      await updateDoc(doc(db, 'productos', editingId.value), data)
+    let productId = editingId.value
+    if (productId) {
+      await updateDoc(doc(db, 'productos', productId), data)
     } else {
-      await addDoc(collection(db, 'productos'), { ...data, active: true, createdAt: serverTimestamp() })
+      const created = await addDoc(collection(db, 'productos'), { ...data, active: true, createdAt: serverTimestamp() })
+      productId = created.id
+      // Si la subida de la imagen falla, reintentar edita este producto en vez de duplicarlo.
+      editingId.value = productId
     }
+
+    // La imagen se sube después de guardar los datos, así un fallo en la
+    // subida nunca hace perder el resto del formulario.
+    const previousPath = currentImage.value?.path
+    if (PRODUCT_IMAGES_ENABLED && imageFile.value) {
+      const { uploadProductImage, deleteProductImage } = await loadImageTools()
+      const uploaded = await uploadProductImage(productId, imageFile.value)
+      await updateDoc(doc(db, 'productos', productId), { image: uploaded.url, imagePath: uploaded.path })
+      await deleteProductImage(previousPath)
+    } else if (PRODUCT_IMAGES_ENABLED && removeCurrentImage.value) {
+      const { deleteProductImage } = await loadImageTools()
+      await updateDoc(doc(db, 'productos', productId), { image: '', imagePath: '' })
+      await deleteProductImage(previousPath)
+    }
+
+    resetImage()
     isFormOpen.value = false
   } catch (err) {
     console.error('No se pudo guardar el producto', err)
-    formError.value = 'No se pudo guardar el producto.'
+    const code = (err as { code?: string })?.code ?? ''
+    formError.value = code.startsWith('storage/')
+      ? 'Los datos se guardaron, pero no se pudo subir la imagen. Intenta de nuevo.'
+      : 'No se pudo guardar el producto.'
   } finally {
     isSaving.value = false
   }
@@ -128,7 +215,12 @@ async function confirmDelete() {
   if (!productToDelete.value) return
   isDeleting.value = true
   try {
+    const imagePath = productToDelete.value.imagePath
     await deleteDoc(doc(db, 'productos', productToDelete.value.id))
+    if (PRODUCT_IMAGES_ENABLED && imagePath) {
+      const { deleteProductImage } = await loadImageTools()
+      await deleteProductImage(imagePath)
+    }
     productToDelete.value = null
   } finally {
     isDeleting.value = false
@@ -215,6 +307,45 @@ async function confirmDelete() {
           />
         </div>
 
+        <div v-if="PRODUCT_IMAGES_ENABLED">
+          <label class="block text-xs tracking-wide text-white/40 mb-1.5">IMAGEN</label>
+          <div class="flex items-center gap-4">
+            <div
+              class="w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-white/10 bg-[#151515] flex items-center justify-center"
+            >
+              <img v-if="imagePreview" :src="imagePreview" alt="Vista previa" class="w-full h-full object-cover" />
+              <svg v-else width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-white/20">
+                <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
+              </svg>
+            </div>
+            <div class="flex flex-col gap-2">
+              <div class="flex items-center gap-2">
+                <label
+                  class="cursor-pointer text-xs font-semibold text-white/70 border border-white/10 rounded-lg px-3 py-2 hover:border-white/25 hover:text-white transition"
+                >
+                  {{ imagePreview ? 'Cambiar imagen' : 'Subir imagen' }}
+                  <input
+                    ref="imageInput"
+                    type="file"
+                    :accept="ACCEPTED_IMAGE_TYPES"
+                    class="hidden"
+                    @change="onImageSelected"
+                  />
+                </label>
+                <button
+                  v-if="imagePreview"
+                  type="button"
+                  class="text-xs text-white/40 hover:text-red-400 transition"
+                  @click="removeImage"
+                >
+                  Quitar
+                </button>
+              </div>
+              <p class="text-[11px] text-white/30">JPG, PNG o WebP. Se optimiza automáticamente.</p>
+            </div>
+          </div>
+        </div>
+
         <p v-if="formError" class="text-xs text-red-400">{{ formError }}</p>
 
         <div class="flex items-center gap-3">
@@ -251,7 +382,17 @@ async function confirmDelete() {
         class="bg-[#0e0e0e] border border-white/10 rounded-xl px-5 py-4 flex items-center justify-between"
       >
         <div class="flex items-center gap-4 min-w-0">
-          <div class="w-10 h-10 shrink-0 rounded-lg flex items-center justify-center bg-[#3a2f12] text-[#c9a24b] border border-[#c9a24b]/20">
+          <img
+            v-if="producto.image"
+            :src="producto.image"
+            :alt="producto.name"
+            loading="lazy"
+            class="w-12 h-12 shrink-0 rounded-lg object-cover border border-white/10"
+          />
+          <div
+            v-else
+            class="w-12 h-12 shrink-0 rounded-lg flex items-center justify-center bg-[#3a2f12] text-[#c9a24b] border border-[#c9a24b]/20"
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
               <polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
@@ -263,7 +404,11 @@ async function confirmDelete() {
             <p class="text-xs">
               <span class="text-[#c9a24b] font-semibold">${{ producto.price.toLocaleString('es-CO') }}</span>
               <span class="text-white/30 mx-1.5">·</span>
-              <span class="text-[#34d399]">Stock: {{ producto.stock }}</span>
+              <span v-if="producto.stock <= 0" class="text-red-400 font-semibold">Agotado</span>
+              <span v-else-if="producto.stock <= LOW_STOCK_THRESHOLD" class="text-[#f2b705] font-semibold">
+                Stock: {{ producto.stock }} · por agotarse
+              </span>
+              <span v-else class="text-[#34d399]">Stock: {{ producto.stock }}</span>
             </p>
           </div>
         </div>

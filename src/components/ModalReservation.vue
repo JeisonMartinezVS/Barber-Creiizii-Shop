@@ -1,8 +1,21 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref } from 'vue'
-import { formatCOP, formatLocalDate, STEPS, useBookingStore } from '../stores/booking'
+import {
+  formatCOP,
+  formatLocalDate,
+  LOW_STOCK_THRESHOLD,
+  MAX_PRODUCTS_PER_BOOKING,
+  STEPS,
+  useBookingStore,
+} from '../stores/booking'
 
 const store = useBookingStore()
+
+// Un producto se puede agregar si tiene stock y no se llegó al máximo por cita.
+function canAddProduct(product: { id: string; stock: number }) {
+  if (store.selectedProductIds.has(product.id)) return true
+  return product.stock > 0 && store.selectedProductIds.size < MAX_PRODUCTS_PER_BOOKING
+}
 
 // Política de datos: se abre desde la casilla de autorización del paso "Datos".
 const LegalModal = defineAsyncComponent(() => import('./LegalModal.vue'))
@@ -670,7 +683,9 @@ async function handleCancelStored() {
                 </span>
                 <div>
                   <p class="text-sm font-semibold text-white">Lleva algo para casa</p>
-                  <p class="text-xs text-white/40">Agrega productos para mantener tu estilo</p>
+                  <p class="text-xs text-white/40">
+                    Agrega productos para mantener tu estilo (máximo {{ MAX_PRODUCTS_PER_BOOKING }})
+                  </p>
                 </div>
               </div>
 
@@ -679,7 +694,8 @@ async function handleCancelStored() {
                   v-for="product in store.products"
                   :key="product.id"
                   type="button"
-                  class="w-full flex items-center justify-between px-4 py-3.5 rounded-xl border transition text-left"
+                  :disabled="!canAddProduct(product)"
+                  class="w-full flex items-center justify-between px-4 py-3.5 rounded-xl border transition text-left disabled:opacity-40 disabled:cursor-not-allowed"
                   :class="
                     store.selectedProductIds.has(product.id)
                       ? 'border-primary/60 bg-primary/5'
@@ -697,7 +713,13 @@ async function handleCancelStored() {
                     </span>
                     <div>
                       <p class="text-sm font-semibold text-white">{{ product.name }}</p>
-                      <p class="text-xs text-white/40">{{ product.brand }}</p>
+                      <p class="text-xs text-white/40">
+                        {{ product.brand }}
+                        <span v-if="product.stock <= 0" class="text-red-400 font-semibold">· Agotado</span>
+                        <span v-else-if="product.stock <= LOW_STOCK_THRESHOLD" class="text-[#f2b705]">
+                          · {{ product.stock === 1 ? 'Última unidad' : `Últimas ${product.stock}` }}
+                        </span>
+                      </p>
                     </div>
                   </div>
                   <div class="flex items-center gap-3 shrink-0 ml-4">

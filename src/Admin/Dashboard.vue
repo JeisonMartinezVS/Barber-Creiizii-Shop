@@ -9,6 +9,8 @@ const authStore = useAuthStore()
 
 // Solo lo ven los empleados en su primer ingreso: se descarga cuando hace falta.
 const ChangePasswordModal = defineAsyncComponent(() => import('../components/dashboard/ChangePasswordModal.vue'))
+// Aviso de productos por agotarse (visible para admin y empleados).
+const LowStockAlert = defineAsyncComponent(() => import('../components/dashboard/LowStockAlert.vue'))
 
 interface NavItem {
   name: string
@@ -183,6 +185,7 @@ async function handleLogout() {
 
     <!-- Contenido -->
     <main class="flex-1 min-w-0 p-4 md:p-6">
+      <LowStockAlert />
       <router-view />
     </main>
 

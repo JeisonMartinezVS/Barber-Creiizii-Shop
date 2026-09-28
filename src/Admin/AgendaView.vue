@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { collection, deleteDoc, doc, onSnapshot, orderBy, query, setDoc, updateDoc, where } from 'firebase/firestore'
+import { collection, doc, increment, onSnapshot, orderBy, query, setDoc, where, writeBatch } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { useAuthStore } from '../stores/auth'
-import { formatLocalDate, getSlotId, useBookingStore } from '../stores/booking'
+import { formatLocalDate, getSlotId, stockDeltaForStatusChange, useBookingStore } from '../stores/booking'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
 
 const authStore = useAuthStore()
@@ -17,6 +17,7 @@ interface Cita {
   barberoName: string
   serviceName: string
   products: Array<{ id: string; name: string; price: number }>
+  productIds?: string[] // solo en citas que descontaron stock al reservarse
   total: number
   date: string // "YYYY-MM-DD"
   time: string
@@ -171,9 +172,33 @@ async function releaseSlot(cita: Cita) {
   })
 }
 
+// Mensaje visible cuando una acción de la agenda falla (p. ej. sin stock).
+const actionError = ref('')
+
 async function setStatus(cita: Cita, status: CitaStatus) {
   closeMenu()
-  await updateDoc(doc(db, 'citas', cita.id), { status })
+  actionError.value = ''
+  // El cambio de estado y el ajuste de stock van en el mismo lote: si la cita
+  // se cancela o "no asistió" el producto vuelve al inventario; si se
+  // reactiva, se descuenta de nuevo.
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'citas', cita.id), { status })
+  const delta = stockDeltaForStatusChange(cita.status, status)
+  if (delta !== 0) {
+    for (const productId of cita.productIds ?? []) {
+      batch.update(doc(db, 'productos', productId), { stock: increment(delta), stockCitaId: cita.id })
+    }
+  }
+  try {
+    await batch.commit()
+  } catch (err) {
+    console.error('No se pudo cambiar el estado de la cita', err)
+    actionError.value =
+      delta === -1 && cita.productIds?.length
+        ? `No se pudo reactivar la cita de ${cita.customerName}: alguno de sus productos no tiene stock.`
+        : 'No se pudo cambiar el estado de la cita. Intenta de nuevo.'
+    return
+  }
   if (status === 'cancelada') await releaseSlot(cita)
 }
 
@@ -181,6 +206,27 @@ const citaToDelete = ref<Cita | null>(null)
 const isDeleting = ref(false)
 
 const citaToProducts = ref<Cita | null>(null)
+
+// Imagen actual de cada producto (productos/{id}.image). La cita solo guarda
+// id, nombre y precio; la imagen se busca en vivo, así un cambio de foto se ve
+// también en las citas ya agendadas.
+const productImages = ref<Record<string, string>>({})
+let unsubscribeProductImages: (() => void) | null = null
+onMounted(() => {
+  unsubscribeProductImages = onSnapshot(
+    collection(db, 'productos'),
+    (snapshot) => {
+      const images: Record<string, string> = {}
+      for (const d of snapshot.docs) {
+        const image = d.data().image
+        if (typeof image === 'string' && image) images[d.id] = image
+      }
+      productImages.value = images
+    },
+    (err) => console.error('No se pudieron cargar las imágenes de productos', err),
+  )
+})
+onUnmounted(() => unsubscribeProductImages?.())
 
 function openProducts(cita: Cita) {
   citaToProducts.value = cita
@@ -201,9 +247,23 @@ function cancelDelete() {
 async function confirmDelete() {
   if (!citaToDelete.value) return
   isDeleting.value = true
+  actionError.value = ''
+  const cita = citaToDelete.value
   try {
-    await deleteDoc(doc(db, 'citas', citaToDelete.value.id))
-    await releaseSlot(citaToDelete.value)
+    // Eliminar una cita pendiente o confirmada devuelve sus productos al stock.
+    const batch = writeBatch(db)
+    batch.delete(doc(db, 'citas', cita.id))
+    if (cita.status === 'pendiente' || cita.status === 'confirmada') {
+      for (const productId of cita.productIds ?? []) {
+        batch.update(doc(db, 'productos', productId), { stock: increment(1), stockCitaId: cita.id })
+      }
+    }
+    await batch.commit()
+    await releaseSlot(cita)
+    citaToDelete.value = null
+  } catch (err) {
+    console.error('No se pudo eliminar la cita', err)
+    actionError.value = 'No se pudo eliminar la cita. Intenta de nuevo.'
     citaToDelete.value = null
   } finally {
     isDeleting.value = false
@@ -219,6 +279,13 @@ function refresh() {
 <template>
   <div>
     <DashboardStats />
+
+    <p
+      v-if="actionError"
+      class="mb-4 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-2.5"
+    >
+      {{ actionError }}
+    </p>
 
     <!-- Barra de herramientas -->
     <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4">
@@ -408,8 +475,17 @@ function refresh() {
             class="flex items-center justify-between gap-4 bg-white/[0.03] border border-white/10 rounded-xl px-4 py-3"
           >
             <div class="flex items-center gap-3 min-w-0">
-              <div class="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center bg-[#3a2f12] text-[#c9a24b] border border-[#c9a24b]/20">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <img
+                v-if="productImages[product.id]"
+                :src="productImages[product.id]"
+                :alt="product.name"
+                class="w-14 h-14 shrink-0 rounded-lg object-cover border border-white/10"
+              />
+              <div
+                v-else
+                class="w-14 h-14 shrink-0 rounded-lg flex items-center justify-center bg-[#3a2f12] text-[#c9a24b] border border-[#c9a24b]/20"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4Z" />
                   <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
                   <line x1="12" y1="22.08" x2="12" y2="12" />

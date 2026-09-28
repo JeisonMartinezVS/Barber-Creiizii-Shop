@@ -116,7 +116,7 @@ Barber-Creiizii-Shop/
 | `citas` | Reservas: barbero, servicio, fecha/hora, total, estado, datos del cliente (**solo nombre y celular**) y registro de la autorización (`privacyConsent`, `privacyPolicyVersion`, `createdAt`). Lectura pública solo por ID; nadie externo puede listarlas. | ⚠️ Sí |
 | `disponibilidad` | Un documento por horario ocupado (`barberoId_fecha_hora`) enlazado a su cita (`citaId`). Evita reservas dobles. | No |
 | `empleados` | Ficha del personal: `name`, `email`, `phone`, `username`, `role`, `active`, `schedule`, `mustChangePassword`, `tempPasswordSetAt`. El ID del documento es el UID de Firebase Auth. **Lectura pública** (el modal de reservas lee aquí barberos y horarios); solo el admin escribe, y cada empleado solo su propio `schedule`. | ⚠️ Sí |
-| `productos` | Catálogo de productos. | No |
+| `productos` | Catálogo de productos. `image` es la URL pública de su imagen y `imagePath` su ruta en Cloud Storage (`productos/{id}/…`). | No |
 | `config` | Servicios, categorías, precios y configuración general. | No |
 
 ---

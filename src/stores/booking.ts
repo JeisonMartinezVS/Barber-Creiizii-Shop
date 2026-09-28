@@ -5,6 +5,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  increment,
   onSnapshot,
   orderBy,
   query,
@@ -12,7 +13,6 @@ import {
   Timestamp,
   where,
   writeBatch,
-  type DocumentReference,
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { PRIVACY_POLICY_VERSION } from '../content/legalVersion'
@@ -43,6 +43,30 @@ export interface Product {
   name: string
   brand: string
   price: number
+  stock: number
+}
+
+// --- Stock -------------------------------------------------------------------
+// Cada producto de una cita descuenta 1 unidad al reservar y la devuelve si la
+// cita se cancela o se marca "no asistió". Las reglas de Firestore solo
+// permiten mover el stock así, ligado a una cita en el mismo lote.
+
+/** Máximo de productos por cita (lo que las reglas pueden verificar). */
+export const MAX_PRODUCTS_PER_BOOKING = 3
+/** Desde esta cantidad se avisa que el producto está por agotarse. */
+export const LOW_STOCK_THRESHOLD = 3
+
+const STOCK_HOLDING_STATUSES = ['pendiente', 'confirmada', 'completada']
+
+/**
+ * Cuánto cambia el stock de cada producto de una cita al pasar de un estado a
+ * otro: -1 si empieza a retener el producto, +1 si lo libera, 0 si nada cambia.
+ */
+export function stockDeltaForStatusChange(from: string, to: string): -1 | 0 | 1 {
+  const heldBefore = STOCK_HOLDING_STATUSES.includes(from)
+  const holdsNow = STOCK_HOLDING_STATUSES.includes(to)
+  if (heldBefore === holdsNow) return 0
+  return holdsNow ? -1 : 1
 }
 
 export interface DaySchedule {
@@ -218,7 +242,13 @@ export const useBookingStore = defineStore('booking', () => {
     (snapshot) => {
       products.value = snapshot.docs.map((d) => {
         const data = d.data()
-        return { id: d.id, name: data.name, brand: data.brand ?? '', price: data.price ?? 0 } as Product
+        return {
+          id: d.id,
+          name: data.name,
+          brand: data.brand ?? '',
+          price: data.price ?? 0,
+          stock: Number(data.stock ?? 0),
+        } as Product
       })
     },
     (err) => console.error('No se pudieron cargar los productos', err),
@@ -407,8 +437,13 @@ export const useBookingStore = defineStore('booking', () => {
   }
   function toggleProduct(id: string) {
     const set = new Set(selectedProductIds.value)
-    if (set.has(id)) set.delete(id)
-    else set.add(id)
+    if (set.has(id)) {
+      set.delete(id)
+    } else {
+      const product = products.value.find((p) => p.id === id)
+      if (!product || product.stock <= 0 || set.size >= MAX_PRODUCTS_PER_BOOKING) return
+      set.add(id)
+    }
     selectedProductIds.value = set
   }
 
@@ -438,7 +473,12 @@ export const useBookingStore = defineStore('booking', () => {
     // horario esté libre, así nadie puede ocupar horarios sin una cita real
     // ni se producen reservas dobles.
     const citaRef = doc(collection(db, 'citas'))
+    const chosenProducts = selectedProducts.value
     const batch = writeBatch(db)
+    // Cada producto elegido descuenta 1 unidad de stock en el mismo lote.
+    for (const product of chosenProducts) {
+      batch.update(doc(db, 'productos', product.id), { stock: increment(-1), stockCitaId: citaRef.id })
+    }
     batch.set(doc(db, 'disponibilidad', slotId), {
       barberoId: barbero.id,
       date: dateStr,
@@ -453,7 +493,8 @@ export const useBookingStore = defineStore('booking', () => {
       serviceName: service.name,
       serviceDuration: service.duration,
       servicePrice: service.price,
-      products: selectedProducts.value.map((p) => ({ id: p.id, name: p.name, price: p.price })),
+      products: chosenProducts.map((p) => ({ id: p.id, name: p.name, price: p.price })),
+      productIds: chosenProducts.map((p) => p.id),
       total: total.value,
       dateTime: Timestamp.fromDate(dateTime),
       date: dateStr,
@@ -472,9 +513,17 @@ export const useBookingStore = defineStore('booking', () => {
       console.error('No se pudo guardar la cita', err)
       // Si el horario ya aparece ocupado, alguien lo tomó primero.
       await fetchBookedTimes()
+      const soldOut = chosenProducts.filter(
+        (chosen) => (products.value.find((p) => p.id === chosen.id)?.stock ?? 0) <= 0,
+      )
       if (bookedTimes.value.includes(time)) {
         submitError.value = 'Ese horario ya no está disponible. Por favor elige otro.'
         goToStep(STEPS.indexOf('Fecha'))
+      } else if (soldOut.length > 0) {
+        const set = new Set(selectedProductIds.value)
+        soldOut.forEach((p) => set.delete(p.id))
+        selectedProductIds.value = set
+        submitError.value = `Se agotó: ${soldOut.map((p) => p.name).join(', ')}. Lo quitamos de tu reserva.`
       } else {
         submitError.value = 'No se pudo guardar tu cita. Intenta de nuevo o escríbenos por WhatsApp.'
       }
@@ -507,22 +556,45 @@ export const useBookingStore = defineStore('booking', () => {
       const citaRef = doc(db, 'citas', citaId)
       const citaSnap = await getDoc(citaRef)
       if (!citaSnap.exists()) return false
-      const cita = citaSnap.data() as { barberoId: string; date: string; time: string }
-
-      // Cancela la cita y libera su horario en el mismo lote: las reglas solo
-      // permiten liberar un horario si su cita queda cancelada a la vez.
-      const batch = writeBatch(db)
-      batch.update(citaRef, { status: 'cancelada' })
-      batch.update(doc(db, 'disponibilidad', getSlotId(cita.barberoId, cita.date, cita.time)), {
-        status: 'cancelada',
-      })
-      try {
-        await batch.commit()
-      } catch {
-        // Citas antiguas sin horario enlazado: se cancela solo la cita y el
-        // personal libera el horario desde la agenda.
-        await cancelCitaOnly(citaRef)
+      const cita = citaSnap.data() as {
+        barberoId: string
+        date: string
+        time: string
+        status: string
+        productIds?: string[]
       }
+      // Solo las citas nuevas (con productIds) descontaron stock al reservarse.
+      const restock = stockDeltaForStatusChange(cita.status, 'cancelada') === 1 ? (cita.productIds ?? []) : []
+      const slotRef = doc(db, 'disponibilidad', getSlotId(cita.barberoId, cita.date, cita.time))
+
+      // Cancela la cita, devuelve el stock y libera el horario en el mismo
+      // lote. Si falla (citas antiguas sin horario enlazado), se reintenta sin
+      // el horario y, en último caso, solo la cita; el personal libera el
+      // horario desde la agenda.
+      const attempts = [
+        { slot: true, stock: true },
+        { slot: false, stock: true },
+        { slot: false, stock: false },
+      ]
+      let lastError: unknown = null
+      for (const attempt of attempts) {
+        const batch = writeBatch(db)
+        batch.update(citaRef, { status: 'cancelada' })
+        if (attempt.slot) batch.update(slotRef, { status: 'cancelada' })
+        if (attempt.stock) {
+          for (const productId of restock) {
+            batch.update(doc(db, 'productos', productId), { stock: increment(1), stockCitaId: citaId })
+          }
+        }
+        try {
+          await batch.commit()
+          lastError = null
+          break
+        } catch (err) {
+          lastError = err
+        }
+      }
+      if (lastError) throw lastError
 
       if (storedBooking.value?.citaId === citaId) {
         storedBooking.value = null
@@ -536,12 +608,6 @@ export const useBookingStore = defineStore('booking', () => {
     } finally {
       isCancelling.value = false
     }
-  }
-
-  async function cancelCitaOnly(citaRef: DocumentReference) {
-    const batch = writeBatch(db)
-    batch.update(citaRef, { status: 'cancelada' })
-    await batch.commit()
   }
 
   return {
