@@ -281,7 +281,18 @@ export const useBookingStore = defineStore('booking', () => {
   const bookedTimes = ref<string[]>([])
   const isLoadingBookedTimes = ref(false)
 
-  const currentStep = computed<StepName>(() => STEPS[currentStepIndex.value] ?? STEPS[0])
+  // Productos que el cliente puede agregar (activos y con stock).
+  const availableProducts = computed(() => products.value.filter((p) => p.stock > 0))
+
+  // Pasos del asistente. Si no hay productos disponibles, el paso "Productos"
+  // se omite y la reserva se confirma directamente desde "Datos".
+  const steps = computed<StepName[]>(() =>
+    availableProducts.value.length > 0 ? [...STEPS] : STEPS.filter((step) => step !== 'Productos'),
+  )
+  const currentStep = computed<StepName>(
+    () => steps.value[currentStepIndex.value] ?? steps.value[steps.value.length - 1]!,
+  )
+  const isLastStep = computed(() => currentStepIndex.value >= steps.value.length - 1)
 
   const selectedBarbero = computed(
     () => bookableBarberos.value.find((b) => b.id === selectedBarberoId.value) ?? null,
@@ -408,7 +419,7 @@ export const useBookingStore = defineStore('booking', () => {
   }
 
   function goToStep(index: number) {
-    if (index >= 0 && index < STEPS.length) currentStepIndex.value = index
+    if (index >= 0 && index < steps.value.length) currentStepIndex.value = index
   }
   function next() {
     goToStep(currentStepIndex.value + 1)
@@ -454,7 +465,7 @@ export const useBookingStore = defineStore('booking', () => {
     }
     if (!isDatosValid.value) {
       submitError.value = 'Revisa tu nombre, tu celular y la autorización de datos.'
-      goToStep(STEPS.indexOf('Datos'))
+      goToStep(steps.value.indexOf('Datos'))
       return
     }
 
@@ -518,7 +529,7 @@ export const useBookingStore = defineStore('booking', () => {
       )
       if (bookedTimes.value.includes(time)) {
         submitError.value = 'Ese horario ya no está disponible. Por favor elige otro.'
-        goToStep(STEPS.indexOf('Fecha'))
+        goToStep(steps.value.indexOf('Fecha'))
       } else if (soldOut.length > 0) {
         const set = new Set(selectedProductIds.value)
         soldOut.forEach((p) => set.delete(p.id))
@@ -617,6 +628,9 @@ export const useBookingStore = defineStore('booking', () => {
     submitError,
     currentStepIndex,
     currentStep,
+    steps,
+    isLastStep,
+    availableProducts,
     barberos,
     bookableBarberos,
     serviceCategories,

@@ -5,7 +5,6 @@ import {
   formatLocalDate,
   LOW_STOCK_THRESHOLD,
   MAX_PRODUCTS_PER_BOOKING,
-  STEPS,
   useBookingStore,
 } from '../stores/booking'
 
@@ -229,7 +228,7 @@ async function handleCancelStored() {
             <div>
               <h2 class="font-serif text-xl font-bold text-white">Reservar Cita</h2>
               <p v-if="!isSpecialScreen" class="text-xs text-primary mt-1">
-                Paso {{ store.currentStepIndex + 1 }} de {{ STEPS.length }} — {{ store.currentStep }}
+                Paso {{ store.currentStepIndex + 1 }} de {{ store.steps.length }} — {{ store.currentStep }}
               </p>
             </div>
             <button
@@ -250,7 +249,7 @@ async function handleCancelStored() {
             v-if="!isSpecialScreen"
             class="flex items-center justify-center gap-2 px-4 py-3 border-b border-white/10 overflow-x-auto shrink-0"
           >
-            <template v-for="(step, index) in STEPS" :key="step">
+            <template v-for="(step, index) in store.steps" :key="step">
               <button
                 type="button"
                 class="flex items-center gap-1.5 shrink-0"
@@ -275,7 +274,7 @@ async function handleCancelStored() {
                   {{ step }}
                 </span>
               </button>
-              <span v-if="index < STEPS.length - 1" class="text-white/15 text-xs">›</span>
+              <span v-if="index < store.steps.length - 1" class="text-white/15 text-xs">›</span>
             </template>
           </div>
 
@@ -393,7 +392,7 @@ async function handleCancelStored() {
             </div>
 
             <!-- Guardando (entre el clic en Confirmar y la respuesta de Firestore) -->
-            <div v-else-if="store.isSubmitting && store.currentStep === 'Productos'" class="py-16 text-center">
+            <div v-else-if="store.isSubmitting" class="py-16 text-center">
               <div class="w-8 h-8 mx-auto mb-4 rounded-full border-2 border-primary/30 border-t-primary animate-spin"></div>
               <p class="text-sm text-white/40">Guardando tu cita...</p>
             </div>
@@ -791,7 +790,7 @@ async function handleCancelStored() {
             </button>
 
             <button
-              v-else-if="store.currentStep === 'Datos'"
+              v-else-if="store.currentStep === 'Datos' && !store.isLastStep"
               type="button"
               :disabled="!store.isDatosValid"
               class="flex items-center gap-1 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] disabled:opacity-40 disabled:cursor-not-allowed text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
@@ -802,9 +801,9 @@ async function handleCancelStored() {
             </button>
 
             <button
-              v-else-if="store.currentStep === 'Productos'"
+              v-else-if="store.isLastStep"
               type="button"
-              :disabled="store.isSubmitting"
+              :disabled="store.isSubmitting || !store.isDatosValid"
               class="flex items-center gap-1.5 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] disabled:opacity-50 text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
               @click="store.confirmBooking"
             >
