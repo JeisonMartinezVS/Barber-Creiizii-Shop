@@ -16,9 +16,9 @@ const routes = [
     component: () => import('../views/Productos.vue'),
     meta: {
       seo: {
-        title: 'Productos para cabello y barba | Barber Creiizii Medellín',
+        title: 'Productos para cabello y barba | North Side Barber Club Medellín',
         description:
-          'Ceras, aceites, shampoos y productos profesionales para el cuidado del cabello y la barba. Consulta disponibilidad por WhatsApp en Barber Creiizii, Medellín.',
+          'Ceras, aceites, shampoos y productos profesionales para el cuidado del cabello y la barba. Consulta disponibilidad por WhatsApp en North Side Barber Club, Medellín.',
       },
     },
   },
@@ -28,7 +28,7 @@ const routes = [
     component: () => import('../Admin/Login.vue'),
     meta: {
       layout: 'admin',
-      seo: { title: 'Iniciar sesión | Barber Creiizii', index: false },
+      seo: { title: 'Iniciar sesión | North Side Barber Club', index: false },
     },
   },
   {
@@ -38,7 +38,7 @@ const routes = [
     meta: {
       layout: 'admin',
       requiresAuth: true,
-      seo: { title: 'Panel de gestión | Barber Creiizii', index: false },
+      seo: { title: 'Panel de gestión | North Side Barber Club', index: false },
     },
     children: [
       {

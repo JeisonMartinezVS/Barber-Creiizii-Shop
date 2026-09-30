@@ -1,6 +1,6 @@
 <template>
   <a
-    href="https://www.instagram.com/creiizii_barber_shop/"
+    href="https://www.instagram.com/north_side_barber_club/"
     target="_blank"
     rel="noopener noreferrer"
     className="hidden md:flex items-center justify-center w-10 h-10 rounded-full transition-colors group"

@@ -61,7 +61,7 @@ const mapEmbedUrl =
               <line x1="14.47" y1="14.48" x2="20" y2="20" />
               <line x1="8.12" y1="8.12" x2="12" y2="12" />
             </svg>
-            Barber Creiizii
+            North Side Barber Club
           </p>
           <p class="text-muted-foreground text-sm">
             Barbería premium en Medellín. Cada detalle cuenta, cada corte es nuestra firma.
@@ -109,7 +109,7 @@ const mapEmbedUrl =
             </div>
           </a>
           <a
-            href="https://instagram.com/creiizii_barber_shop"
+            href="https://instagram.com/north_side_barber_club"
             target="_blank"
             rel="noopener"
             class="flex items-center gap-3 bg-card border border-white/10 rounded-lg px-3 py-3 hover:border-primary/30 transition"
@@ -119,7 +119,7 @@ const mapEmbedUrl =
             </span>
             <div>
               <p class="text-sm font-semibold text-neutral-content">Instagram</p>
-              <p class="text-xs text-muted-foreground">@creiizii_barber_shop</p>
+              <p class="text-xs text-muted-foreground">@north_side_barber_club</p>
             </div>
           </a>
         </div>

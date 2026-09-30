@@ -110,7 +110,7 @@ function whatsappUrl(phone: string, name: string, username: string, password: st
   }
 
   const message =
-    `Hola ${name}, ya tienes acceso al panel de Barber Creiizii Shop.\n\n` +
+    `Hola ${name}, ya tienes acceso al panel de North Side Barber Club.\n\n` +
     `Usuario: ${username}\n` +
     `Contraseña temporal: ${password}\n\n` +
     `Cámbiala apenas puedas iniciar sesión.`

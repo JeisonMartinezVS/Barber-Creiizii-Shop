@@ -1,6 +1,6 @@
-# Barber Creiizii Shop
+# North Side Barber Club
 
-Sitio web y panel administrativo de **Barber Creiizii**, barbería ubicada en Medellín, Colombia. Los clientes consultan servicios, precios y productos, y reservan citas en línea. El equipo gestiona la agenda, los empleados, el catálogo y los reportes desde un panel privado.
+Sitio web y panel administrativo de **North Side Barber Club**, barbería ubicada en Medellín, Colombia. Los clientes consultan servicios, precios y productos, y reservan citas en línea. El equipo gestiona la agenda, los empleados, el catálogo y los reportes desde un panel privado.
 
 ![Vue](https://img.shields.io/badge/Vue-3.5-42b883?logo=vue.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript&logoColor=white)
@@ -314,7 +314,7 @@ Los servidores de estos proveedores pueden estar fuera de Colombia (transmisión
 Un **gran porcentaje del código, del diseño y de los textos** de este proyecto se generó con **[Claude](https://www.anthropic.com/claude)**, un asistente de IA desarrollado por Anthropic, a través de Claude Code. Esta forma de trabajo se conoce como *vibe coding*.
 
 - **Supervisión humana:** el proyecto fue dirigido, revisado, probado y publicado por **JeiXSoft**, que es responsable del resultado final.
-- **Contenido del negocio:** servicios, precios, horarios y datos de contacto los define y mantiene **Barber Creiizii**.
+- **Contenido del negocio:** servicios, precios, horarios y datos de contacto los define y mantiene **North Side Barber Club**.
 - **Datos en producción:** el sitio en funcionamiento **no envía datos de clientes ni de reservas** a Claude, a Anthropic ni a ningún otro servicio de IA. La IA se usó solo como herramienta durante el desarrollo.
 - **Transparencia hacia los usuarios:** el sitio incluye un aviso público sobre el uso de IA en el footer.
 - **Limitaciones:** el código generado por IA puede contener errores. Todo cambio debe pasar `npm run type-check` y `npm run lint` y probarse manualmente antes de publicarse.
@@ -339,7 +339,7 @@ Un **gran porcentaje del código, del diseño y de los textos** de este proyecto
 
 **Software propietario. Todos los derechos reservados © JeiXSoft.**
 
-Este código no es de uso libre. No se permite copiar, modificar, distribuir ni usar este software, total o parcialmente, sin autorización previa y por escrito del autor. La marca, el logotipo y las fotografías de **Barber Creiizii** pertenecen a su titular.
+Este código no es de uso libre. No se permite copiar, modificar, distribuir ni usar este software, total o parcialmente, sin autorización previa y por escrito del autor. La marca, el logotipo y las fotografías de **North Side Barber Club** pertenecen a su titular.
 
 ---
 
@@ -348,6 +348,6 @@ Este código no es de uso libre. No se permite copiar, modificar, distribuir ni 
 | | |
 | --- | --- |
 | **Desarrollo** | JeiXSoft ([@JeisonMartinezVS](https://github.com/JeisonMartinezVS)) |
-| **Negocio** | Barber Creiizii, Carrera 95 #88-40, Aures II, Medellín, Antioquia, Colombia |
+| **Negocio** | North Side Barber Club, Carrera 95 #88-40, Aures II, Medellín, Antioquia, Colombia |
 | **WhatsApp** | [+57 300 628 2601](https://wa.me/573006282601) |
-| **Instagram** | [@creiizii_barber_shop](https://instagram.com/creiizii_barber_shop) |
+| **Instagram** | [@north_side_barber_club](https://instagram.com/north_side_barber_club) |

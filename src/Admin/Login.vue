@@ -59,12 +59,12 @@ async function handleSubmit() {
           <!-- Logo -->
           <div class="flex justify-center mb-6">
             <div
-              class="w-32 h-32 rounded-md flex items-center justify-center overflow-hidden"
+              class="w-full h-32 rounded-md flex items-center justify-center overflow-hidden"
             >
               <img
                 src="../../public/logo.png"
-                alt="Barber Creiizii Shop"
-                class="w-full h-full object-cover"
+                alt="North Side Barber Club"
+                class="w-full h-full object-contain"
               />
             </div>
           </div>
@@ -73,7 +73,7 @@ async function handleSubmit() {
           <h1 class="font-serif text-3xl text-center text-white font-bold mb-1">
             Panel de Gestión
           </h1>
-          <p class="text-center text-sm text-[#8a93a6] mb-8">Barber Creiizii Shop</p>
+          <p class="text-center text-sm text-[#8a93a6] mb-8">North Side Barber Club</p>
 
           <form class="space-y-5" @submit.prevent="handleSubmit">
             <!-- Usuario -->

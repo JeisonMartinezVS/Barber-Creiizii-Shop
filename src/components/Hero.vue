@@ -31,9 +31,9 @@ export default defineComponent({
 
     <div class="relative z-10 flex flex-col items-center justify-center gap-3">
       <img
-        src="../../public/logo.jpg"
-        alt="Barber Creiizii Shop"
-        class="h-64 md:h-80 object-contain"
+        src="../../public/logo.png"
+        alt="North Side Barber Club"
+        class="h-92 object-contain"
         fetchpriority="high"
         decoding="async"
       />
@@ -43,11 +43,6 @@ export default defineComponent({
         MEDELLÍN, COLOMBIA
         <span class="w-8 h-px bg-[#c9a24b]/50"></span>
       </p>
-
-      <h1 class="font-serif italic font-black text-white text-5xl md:text-6xl leading-none">
-        {{ config?.Titulo ?? 'Creiizii' }}
-      </h1>
-      <p class="text-[#c9a24b] tracking-[0.3em] text-sm md:text-base font-semibold">BARBER SHOP</p>
 
       <p class="text-gray-300 max-w-xl mt-2">
         Cada corte es una obra de arte. Tradición artesanal al servicio de tu imagen.

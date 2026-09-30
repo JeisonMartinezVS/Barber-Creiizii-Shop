@@ -7,10 +7,10 @@
 // textos antes de darlos por definitivos.
 
 export const BUSINESS = {
-  name: 'Barber Creiizii',
+  name: 'North Side Barber Club',
   address: 'Carrera 95 #88-40, Aures II, Medellín, Antioquia, Colombia',
   whatsapp: '+57 300 628 2601',
-  instagram: '@creiizii_barber_shop',
+  instagram: '@north_side_barber_club',
   developer: 'JeiXSoft',
 }
 

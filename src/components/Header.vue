@@ -56,7 +56,12 @@ export default defineComponent({
     <div class="flex justify-between items-center max-w-10/12 mx-auto p-4">
       <!-- Logo -->
       <router-link to="/" class="font-gothic text-2xl text-white" @click="closeMobileMenu">
-        Creiizii
+        <img
+          src="../../public/icon.png"
+          alt="North Side"
+          class="h-10 md:h-12 object-contain"
+        />
+        {{ config?.Titulo ?? 'North Side' }}
       </router-link>
 
       <!-- Menú (escritorio) -->
@@ -80,7 +85,7 @@ export default defineComponent({
           <Whatsapp class="w-4 h-4" />
         </a>
         <a
-          href="https://instagram.com/creiizii_barber_shop"
+          href="https://instagram.com/north_side_barber_club"
           class="w-9 h-9 rounded-md bg-white/5 border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:border-white/25 transition"
           aria-label="Instagram"
         >
@@ -139,7 +144,7 @@ export default defineComponent({
           WhatsApp
         </a>
         <a
-          href="https://instagram.com/creiizii_barber_shop"
+          href="https://instagram.com/north_side_barber_club"
           class="flex items-center justify-center gap-2 border border-pink-500/40 text-pink-400 rounded-lg py-2.5 text-sm font-semibold hover:bg-pink-500/10 transition"
         >
           <Instagram class="w-4 h-4" />

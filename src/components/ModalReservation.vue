@@ -172,10 +172,10 @@ const justConfirmedGCalUrl = computed(() => {
   const start = new Date(store.selectedDate)
   start.setHours(h, m, 0, 0)
   return buildGoogleCalendarUrl({
-    title: `${store.selectedService.name} — Barber Creiizii Shop`,
+    title: `${store.selectedService.name} — North Side Barber Club`,
     start,
     durationMinutes: parseInt(store.selectedService.duration, 10) || 30,
-    details: `Cita con ${store.selectedBarbero.name} en Barber Creiizii Shop.`,
+    details: `Cita con ${store.selectedBarbero.name} en North Side Barber Club.`,
   })
 })
 
@@ -184,10 +184,10 @@ const storedGCalUrl = computed(() => {
   const b = store.storedBooking
   if (!b) return '#'
   return buildGoogleCalendarUrl({
-    title: `${b.serviceName} — Barber Creiizii Shop`,
+    title: `${b.serviceName} — North Side Barber Club`,
     start: new Date(b.dateTimeISO),
     durationMinutes: parseInt(b.serviceDuration, 10) || 30,
-    details: `Cita con ${b.barberoName} en Barber Creiizii Shop.`,
+    details: `Cita con ${b.barberoName} en North Side Barber Club.`,
   })
 })
 
@@ -652,7 +652,7 @@ async function handleCancelStored() {
                     class="mt-0.5 w-4 h-4 shrink-0 accent-[#c9a24b]"
                   />
                   <span class="text-xs text-white/60 leading-relaxed">
-                    Al confirmar la reserva autorizo a Barber Creiizii a tratar mi nombre y mi celular para
+                    Al confirmar la reserva autorizo a North Side Barber Club a tratar mi nombre y mi celular para
                     gestionar esta cita y contactarme sobre ella, según la
                     <button
                       type="button"

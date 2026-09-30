@@ -12,7 +12,7 @@ export interface SeoMeta {
 }
 
 const DEFAULT_SEO: SeoMeta = {
-  title: 'Barber Creiizii | Barbería en Medellín – Cortes, barba y estilo',
+  title: 'North Side Barber Club | Barbería en Medellín – Cortes, barba y estilo',
   description:
     'Barbería premium en Aures II, Medellín. Cortes de cabello, arreglo de barba y estilo para caballeros. Reserva tu cita en línea en segundos.',
 }

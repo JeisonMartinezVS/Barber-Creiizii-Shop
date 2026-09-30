@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Iframe oficial de Instagram ("Profile Embed"): sin API keys ni Cloud Functions.
-const instagramUsername = 'creiizii_barber_shop'
+const instagramUsername = 'north_side_barber_club'
 </script>
 
 <template>
@@ -9,7 +9,7 @@ const instagramUsername = 'creiizii_barber_shop'
       <h2 class="font-gothic text-white text-4xl md:text-5xl mb-3">Nuestro Trabajo</h2>
       <p class="text-gray-400 mb-8">Síguenos en Instagram para ver más de nuestros cortes</p>
         <a
-        href="https://instagram.com/creiizii_barber_shop"
+        href="https://instagram.com/north_side_barber_club"
         target="_blank"
         rel="noopener"
         class="inline-flex items-center gap-2 text-primary text-sm font-semibold hover:underline mb-10"
@@ -19,7 +19,7 @@ const instagramUsername = 'creiizii_barber_shop'
           <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37Z" />
           <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
         </svg>
-        @creiizii_barber_shop
+        @north_side_barber_club
       </a>
       <iframe
         :src="`https://www.instagram.com/${instagramUsername}/embed`"
