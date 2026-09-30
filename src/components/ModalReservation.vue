@@ -472,11 +472,18 @@ async function handleCancelStored() {
                     "
                     @click="store.selectService(item.id)"
                   >
-                    <div>
+                    <div class="min-w-0">
                       <p class="text-sm font-semibold text-white">{{ item.name }}</p>
-                      <p class="text-xs text-white/40">{{ item.description }}</p>
+                      <!-- Descripción completa solo en el servicio elegido; en los demás, 2 líneas. -->
+                      <p
+                        v-if="item.description"
+                        class="text-xs text-white/40 mt-0.5 whitespace-pre-line"
+                        :class="store.selectedServiceId === item.id ? '' : 'line-clamp-2'"
+                      >
+                        {{ item.description }}
+                      </p>
                     </div>
-                    <div class="text-right shrink-0 ml-4">
+                    <div class="text-right shrink-0 ml-4 self-start">
                       <p class="text-sm font-bold text-primary">{{ formatCOP(item.price) }}</p>
                       <p class="text-xs text-white/40">{{ item.duration }}</p>
                     </div>

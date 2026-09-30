@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { collection, doc, onSnapshot, updateDoc } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { useAuthStore } from '../stores/auth'
@@ -8,6 +8,7 @@ import ToggleSwitch from '../ui/ToggleSwitch.vue'
 
 interface Item {
   name?: string
+  description?: string
   price?: string
   duration?: string
   active?: boolean
@@ -28,6 +29,7 @@ interface Producto {
   serviceIndex: number
   itemIndex: number
   name: string
+  description: string
   price: string
   duration: string
   title: string
@@ -36,9 +38,11 @@ interface Producto {
 
 const authStore = useAuthStore()
 
-// Estas tres siempre deben poder elegirse, incluso antes de que exista
+// Estas categorías siempre deben poder elegirse, incluso antes de que exista
 // ningún corte todavía.
-const DEFAULT_SERVICE_TITLES = ['Corte de Cabello', 'Barba', 'Cejas'].map((s) => s.toUpperCase())
+const DEFAULT_SERVICE_TITLES = ['Corte de Cabello', 'Barba', 'Cejas', 'Servicios Premium'].map((s) =>
+  s.toUpperCase(),
+)
 
 const productos = ref<Producto[]>([])
 const services = ref<Service[]>([])
@@ -81,6 +85,7 @@ onMounted(() => {
             serviceIndex,
             itemIndex,
             name: String(item.name || ''),
+            description: String(item.description || ''),
             price: String(item.price || ''),
             duration: String(item.duration || ''),
             title,
@@ -101,6 +106,28 @@ onMounted(() => {
 })
 onUnmounted(() => unsubscribe?.())
 
+// --- Filtro por servicio --------------------------------------------------
+// 'todos' muestra todo agrupado por servicio; un título muestra solo ese.
+const selectedService = ref('todos')
+
+const serviceCounts = computed(() => {
+  const counts: Record<string, number> = {}
+  for (const producto of productos.value) counts[producto.title] = (counts[producto.title] ?? 0) + 1
+  return counts
+})
+
+const groupedProductos = computed(() =>
+  serviceTitles.value
+    .filter((title) => selectedService.value === 'todos' || title === selectedService.value)
+    .map((title) => ({ title, items: productos.value.filter((p) => p.title === title) }))
+    .filter((group) => group.items.length > 0 || selectedService.value !== 'todos'),
+)
+
+// Si la categoría elegida deja de existir, se vuelve a "Todos".
+watch(serviceTitles, (titles) => {
+  if (selectedService.value !== 'todos' && !titles.includes(selectedService.value)) selectedService.value = 'todos'
+})
+
 // --- Formulario -----------------------------------------------------------
 const isFormOpen = ref(false)
 const editingId = ref<string | null>(null)
@@ -109,6 +136,7 @@ const formError = ref('')
 
 const form = reactive({
   name: '',
+  description: '',
   price: '',
   duration: '',
   title: '',
@@ -116,9 +144,11 @@ const form = reactive({
 
 function resetForm() {
   form.name = ''
+  form.description = ''
   form.price = ''
   form.duration = ''
-  form.title = serviceTitles.value[0] || ''
+  // Si hay un servicio filtrado, el corte nuevo se crea en ese servicio.
+  form.title = selectedService.value !== 'todos' ? selectedService.value : serviceTitles.value[0] || ''
   formError.value = ''
 }
 function openCreateForm() {
@@ -129,6 +159,7 @@ function openCreateForm() {
 function openEditForm(producto: Producto) {
   editingId.value = producto.id
   form.name = producto.name
+  form.description = producto.description
   form.price = producto.price
   form.duration = producto.duration
   form.title = producto.title
@@ -190,6 +221,7 @@ async function saveProduct() {
       const updatedItem = {
         ...item,
         name: form.name.trim(),
+        description: form.description.trim(),
         price: form.price.trim(),
         duration: form.duration.trim(),
       }
@@ -222,6 +254,7 @@ async function saveProduct() {
       if (!service.items) service.items = []
       service.items.push({
         name: form.name.trim(),
+        description: form.description.trim(),
         price: form.price.trim(),
         duration: form.duration.trim(),
         active: true,
@@ -362,6 +395,16 @@ async function confirmDelete() {
             </div>
           </div>
 
+          <div>
+            <label class="block text-xs tracking-wide text-white/40 mb-1.5">DESCRIPCIÓN</label>
+            <textarea
+              v-model="form.description"
+              rows="5"
+              placeholder="Paso 1 | Vapor Ozono... (opcional, se muestra a los clientes)"
+              class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#4a8fe7]/50 resize-y"
+            ></textarea>
+          </div>
+
           <p v-if="formError" class="text-xs text-red-400">{{ formError }}</p>
 
           <div class="flex items-center gap-3">
@@ -395,59 +438,113 @@ async function confirmDelete() {
       </p>
       <p v-if="loading" class="text-sm text-white/30 text-center py-10">Cargando cortes...</p>
 
-      <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div
-          v-for="producto in productos"
-          :key="producto.id"
-          class="bg-[#0e0e0e] border border-white/10 rounded-xl px-5 py-4 flex items-center justify-between"
-        >
-          <div class="flex items-center gap-4 min-w-0">
-            <div class="w-10 h-10 shrink-0 rounded-lg flex items-center justify-center bg-[#0f2140] text-[#4a8fe7] border border-[#4a8fe7]/20">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
-              </svg>
-            </div>
-            <div class="min-w-0">
-              <p class="text-sm font-semibold text-white truncate">{{ producto.name || 'Sin nombre' }}</p>
-              <p class="text-xs text-white/40 mb-1 truncate">
-                {{ producto.title || 'Sin servicio' }}<span v-if="producto.duration"> · {{ producto.duration }}</span>
-              </p>
-              <p class="text-xs"><span class="text-[#4a8fe7] font-semibold">${{ producto.price || '0' }}</span></p>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-2 shrink-0">
-            <ToggleSwitch :model-value="producto.active" @update:model-value="toggleActive(producto)" />
-            <button
-              type="button"
-              class="w-9 h-9 flex items-center justify-center rounded-lg border border-white/10 text-white/50 hover:text-white hover:border-white/20 transition"
-              aria-label="Editar"
-              @click="openEditForm(producto)"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="w-9 h-9 flex items-center justify-center rounded-lg border border-white/10 text-white/50 hover:text-red-400 hover:border-red-400/30 transition"
-              aria-label="Eliminar"
-              @click="askDelete(producto)"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-              </svg>
-            </button>
-          </div>
+      <template v-else>
+        <!-- Filtro por servicio -->
+        <div class="flex flex-wrap gap-2 mb-5">
+          <button
+            type="button"
+            class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition"
+            :class="
+              selectedService === 'todos'
+                ? 'border-[#4a8fe7]/60 bg-[#4a8fe7]/15 text-[#4a8fe7]'
+                : 'border-white/10 text-white/60 hover:text-white hover:border-white/30'
+            "
+            @click="selectedService = 'todos'"
+          >
+            Todos <span class="opacity-60">({{ productos.length }})</span>
+          </button>
+          <button
+            v-for="title in serviceTitles"
+            :key="title"
+            type="button"
+            class="px-3 py-1.5 text-xs font-semibold rounded-lg border transition"
+            :class="
+              selectedService === title
+                ? 'border-[#4a8fe7]/60 bg-[#4a8fe7]/15 text-[#4a8fe7]'
+                : 'border-white/10 text-white/60 hover:text-white hover:border-white/30'
+            "
+            @click="selectedService = title"
+          >
+            {{ title }} <span class="opacity-60">({{ serviceCounts[title] ?? 0 }})</span>
+          </button>
         </div>
 
-        <p v-if="productos.length === 0" class="text-sm text-white/30 text-center py-10 md:col-span-2">
+        <p v-if="productos.length === 0" class="text-sm text-white/30 text-center py-10">
           Sin cortes registrados todavía.
         </p>
-      </div>
+
+        <div v-else class="space-y-8">
+          <div v-for="group in groupedProductos" :key="group.title">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="text-sm font-semibold text-white bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
+                {{ group.title }}
+              </span>
+              <span class="flex-1 h-px border-t border-dashed border-white/10"></span>
+              <span class="text-sm text-white/40">
+                {{ group.items.length }} {{ group.items.length === 1 ? 'servicio' : 'servicios' }}
+              </span>
+            </div>
+
+            <p v-if="group.items.length === 0" class="text-sm text-white/30 text-center py-8">
+              No hay servicios en esta categoría todavía.
+            </p>
+
+            <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div
+                v-for="producto in group.items"
+                :key="producto.id"
+                class="bg-[#0e0e0e] border border-white/10 rounded-xl px-5 py-4 flex items-start justify-between gap-3"
+              >
+                <div class="flex items-start gap-4 min-w-0">
+                  <div class="w-10 h-10 shrink-0 rounded-lg flex items-center justify-center bg-[#0f2140] text-[#4a8fe7] border border-[#4a8fe7]/20">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
+                    </svg>
+                  </div>
+                  <div class="min-w-0">
+                    <p class="text-sm font-semibold text-white truncate">{{ producto.name || 'Sin nombre' }}</p>
+                    <p class="text-xs text-white/40 mb-1 truncate">
+                      {{ producto.title || 'Sin servicio' }}<span v-if="producto.duration"> · {{ producto.duration }}</span>
+                    </p>
+                    <p class="text-xs"><span class="text-[#4a8fe7] font-semibold">${{ producto.price || '0' }}</span></p>
+                    <p v-if="producto.description" class="text-xs text-white/40 mt-1 line-clamp-2 whitespace-pre-line">
+                      {{ producto.description }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0">
+                  <ToggleSwitch :model-value="producto.active" @update:model-value="toggleActive(producto)" />
+                  <button
+                    type="button"
+                    class="w-9 h-9 flex items-center justify-center rounded-lg border border-white/10 text-white/50 hover:text-white hover:border-white/20 transition"
+                    aria-label="Editar"
+                    @click="openEditForm(producto)"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    class="w-9 h-9 flex items-center justify-center rounded-lg border border-white/10 text-white/50 hover:text-red-400 hover:border-red-400/30 transition"
+                    aria-label="Eliminar"
+                    @click="askDelete(producto)"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </template>
     </template>
 
     <!-- Modal: confirmar eliminación -->

@@ -152,6 +152,7 @@ function clearStoredBooking() {
 // escribe CutsView.vue.
 interface RawServiceItem {
   name?: string
+  description?: string
   price?: string | number
   duration?: string | number
   active?: boolean
@@ -172,7 +173,7 @@ function parseServiceCategories(raw: RawService[] | undefined): ServiceCategory[
         .map((item, itemIndex) => ({
           id: `service-${serviceIndex}-item-${itemIndex}`,
           name: String(item.name || '').trim(),
-          description: '',
+          description: String(item.description || '').trim(),
           duration: item.duration ? String(item.duration) : '30 min',
           price: Number(String(item.price ?? '0').replace(/\D/g, '')) || 0,
         })),

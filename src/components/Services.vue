@@ -6,6 +6,7 @@ import ServiceCategoryCard, { type ServiceItem } from './ServiceCategoryCard.vue
 
 interface Item {
   name?: string
+  description?: string
   price?: string | number
   duration?: string | number
   active?: boolean
@@ -32,6 +33,7 @@ const icons = [
   `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>`,
   `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3m0 0 2.5 2.5M12 6 9.5 8.5M5 12h3m0 0 2.5-2.5M8 12l2.5 2.5M19 12h-3m0 0-2.5-2.5M16 12l-2.5 2.5M12 19v2"/></svg>`,
   `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 5.8L20 10l-5 3.9L16.8 20 12 16.6 7.2 20 9 13.9 4 10l6.1-1.2Z"/></svg>`,
 ]
 
 onMounted(() => {
@@ -59,6 +61,7 @@ onMounted(() => {
             .filter((item) => item.active !== false)
             .map((item) => ({
               name: String(item.name || ''),
+              description: String(item.description || '').trim(),
               duration: String(item.duration || ''),
               price: `$${String(item.price || '0')}`,
             })),
@@ -90,7 +93,7 @@ onMounted(() => {
         Servicios profesionales de barbería adaptados a tu estilo personal
       </p>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-left items-stretch">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-left items-start">
         <ServiceCategoryCard
           v-for="category in categories"
           :key="category.title"
