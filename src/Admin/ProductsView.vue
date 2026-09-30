@@ -1,16 +1,20 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, reactive, ref } from 'vue'
-import { addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+  writeBatch,
+} from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { LOW_STOCK_THRESHOLD } from '../stores/booking'
-
-// Imágenes de productos DESACTIVADAS: Firebase Cloud Storage requiere el plan
-// Blaze. Para activarlas: habilitar Storage en la consola, publicar sus reglas
-// y cambiar esto a true. Mientras esté en false, el producto se guarda sin
-// imagen y el código de Storage ni siquiera se descarga.
-const PRODUCT_IMAGES_ENABLED = false
-const ACCEPTED_IMAGE_TYPES = 'image/jpeg,image/png,image/webp'
-const loadImageTools = () => import('../lib/productImages')
+import { PRODUCT_CATALOG } from '../config/productCatalog'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
 import ToggleSwitch from '../ui/ToggleSwitch.vue'
 
@@ -22,9 +26,11 @@ interface Producto {
   stock: number
   description: string
   active: boolean
-  image?: string // URL pública de la imagen (Cloud Storage)
-  imagePath?: string // ruta en Cloud Storage, para borrarla al reemplazarla
+  image?: string
 }
+
+const catalogIds = new Set(PRODUCT_CATALOG.map((p) => p.id))
+const isCatalogProduct = (producto: Producto) => catalogIds.has(producto.id)
 
 const productos = ref<Producto[]>([])
 let unsubscribe: (() => void) | null = null
@@ -37,160 +43,95 @@ onMounted(() => {
 })
 onUnmounted(() => unsubscribe?.())
 
-// --- Formulario en línea (crear / editar) ---------------------------------
-const isFormOpen = ref(false)
-const editingId = ref<string | null>(null)
+// Productos del catálogo que todavía no están en Firestore.
+const missingCount = computed(() => {
+  const existing = new Set(productos.value.map((p) => p.id))
+  return PRODUCT_CATALOG.filter((p) => !existing.has(p.id)).length
+})
+
+// --- Guardar catálogo en Firestore ----------------------------------------
+// Crea los productos que falten (stock 0, activos) y refresca en los que ya
+// existen la imagen, marca, precio y descripción del catálogo. Nunca pisa el
+// nombre ni el stock, que se editan desde este panel.
+const isSyncing = ref(false)
+const syncMessage = ref('')
+const syncError = ref(false)
+
+async function syncCatalog() {
+  isSyncing.value = true
+  syncMessage.value = ''
+  syncError.value = false
+  try {
+    const snapshot = await getDocs(collection(db, 'productos'))
+    const existing = new Set(snapshot.docs.map((d) => d.id))
+    const batch = writeBatch(db)
+    let created = 0
+    for (const item of PRODUCT_CATALOG) {
+      const productRef = doc(db, 'productos', item.id)
+      const fixed = { image: item.image, brand: item.brand, price: item.price, description: item.description }
+      if (existing.has(item.id)) {
+        batch.update(productRef, fixed)
+      } else {
+        batch.set(productRef, { ...fixed, name: item.name, stock: 0, active: true, createdAt: serverTimestamp() })
+        created++
+      }
+    }
+    await batch.commit()
+    syncMessage.value = created
+      ? `Se crearon ${created} producto${created === 1 ? '' : 's'}. Ahora asígnales stock.`
+      : 'Productos actualizados.'
+  } catch (err) {
+    console.error('No se pudo guardar el catálogo', err)
+    syncError.value = true
+    syncMessage.value = 'No se pudieron guardar los productos.'
+  } finally {
+    isSyncing.value = false
+  }
+}
+
+// --- Formulario en línea (solo nombre y stock) -----------------------------
+const editingProduct = ref<Producto | null>(null)
 const isSaving = ref(false)
 const formError = ref('')
 
 const form = reactive({
   name: '',
-  brand: '',
-  price: '',
   stock: '',
-  description: '',
 })
 
-// --- Imagen del producto ---------------------------------------------------
-const imageFile = ref<File | null>(null) // archivo nuevo elegido (aún sin subir)
-const imagePreview = ref('') // lo que se muestra en el formulario
-const currentImage = ref<{ url: string; path: string } | null>(null) // la que ya tiene guardada
-const removeCurrentImage = ref(false)
-const imageInput = ref<HTMLInputElement | null>(null)
-
-function clearPreviewUrl() {
-  if (imagePreview.value.startsWith('blob:')) URL.revokeObjectURL(imagePreview.value)
-}
-
-function resetImage() {
-  clearPreviewUrl()
-  imageFile.value = null
-  imagePreview.value = ''
-  currentImage.value = null
-  removeCurrentImage.value = false
-  if (imageInput.value) imageInput.value.value = ''
-}
-
-async function onImageSelected(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  if (!file) return
-  const { validateImageFile } = await loadImageTools()
-  const error = validateImageFile(file)
-  if (error) {
-    formError.value = error
-    ;(event.target as HTMLInputElement).value = ''
-    return
-  }
-  formError.value = ''
-  clearPreviewUrl()
-  imageFile.value = file
-  imagePreview.value = URL.createObjectURL(file)
-  removeCurrentImage.value = false
-}
-
-function removeImage() {
-  clearPreviewUrl()
-  imageFile.value = null
-  imagePreview.value = ''
-  if (currentImage.value) removeCurrentImage.value = true
-  if (imageInput.value) imageInput.value.value = ''
-}
-
-onUnmounted(clearPreviewUrl)
-
-function resetForm() {
-  form.name = ''
-  form.brand = ''
-  form.price = ''
-  form.stock = ''
-  form.description = ''
-  formError.value = ''
-  resetImage()
-}
-
-function openCreateForm() {
-  editingId.value = null
-  resetForm()
-  isFormOpen.value = true
-}
 function openEditForm(producto: Producto) {
-  editingId.value = producto.id
+  editingProduct.value = producto
   form.name = producto.name
-  form.brand = producto.brand
-  form.price = String(producto.price)
-  form.stock = String(producto.stock)
-  form.description = producto.description
+  form.stock = String(producto.stock ?? 0)
   formError.value = ''
-  resetImage()
-  if (producto.image) {
-    currentImage.value = { url: producto.image, path: producto.imagePath ?? '' }
-    imagePreview.value = producto.image
-  }
-  isFormOpen.value = true
 }
 function closeForm() {
   if (isSaving.value) return
-  isFormOpen.value = false
+  editingProduct.value = null
 }
 
 async function saveProduct() {
+  if (!editingProduct.value) return
   formError.value = ''
   const name = String(form.name).trim()
-  const priceRaw = String(form.price).trim()
-
-  if (!name || !priceRaw) {
-    formError.value = 'Nombre y precio son obligatorios.'
+  if (!name) {
+    formError.value = 'El nombre es obligatorio.'
     return
   }
-  const price = Number(priceRaw)
   const stockRaw = String(form.stock).trim()
   const stock = stockRaw ? Number(stockRaw) : 0
-  if (Number.isNaN(price) || Number.isNaN(stock)) {
-    formError.value = 'Precio y stock deben ser números.'
+  if (!Number.isInteger(stock) || stock < 0) {
+    formError.value = 'El stock debe ser un número entero mayor o igual a 0.'
     return
   }
 
   isSaving.value = true
   try {
-    const data = {
-      name,
-      brand: String(form.brand).trim(),
-      price,
-      stock,
-      description: String(form.description).trim(),
-    }
-    let productId = editingId.value
-    if (productId) {
-      await updateDoc(doc(db, 'productos', productId), data)
-    } else {
-      const created = await addDoc(collection(db, 'productos'), { ...data, active: true, createdAt: serverTimestamp() })
-      productId = created.id
-      // Si la subida de la imagen falla, reintentar edita este producto en vez de duplicarlo.
-      editingId.value = productId
-    }
-
-    // La imagen se sube después de guardar los datos, así un fallo en la
-    // subida nunca hace perder el resto del formulario.
-    const previousPath = currentImage.value?.path
-    if (PRODUCT_IMAGES_ENABLED && imageFile.value) {
-      const { uploadProductImage, deleteProductImage } = await loadImageTools()
-      const uploaded = await uploadProductImage(productId, imageFile.value)
-      await updateDoc(doc(db, 'productos', productId), { image: uploaded.url, imagePath: uploaded.path })
-      await deleteProductImage(previousPath)
-    } else if (PRODUCT_IMAGES_ENABLED && removeCurrentImage.value) {
-      const { deleteProductImage } = await loadImageTools()
-      await updateDoc(doc(db, 'productos', productId), { image: '', imagePath: '' })
-      await deleteProductImage(previousPath)
-    }
-
-    resetImage()
-    isFormOpen.value = false
+    await updateDoc(doc(db, 'productos', editingProduct.value.id), { name, stock })
+    editingProduct.value = null
   } catch (err) {
     console.error('No se pudo guardar el producto', err)
-    const code = (err as { code?: string })?.code ?? ''
-    formError.value = code.startsWith('storage/')
-      ? 'Los datos se guardaron, pero no se pudo subir la imagen. Intenta de nuevo.'
-      : 'No se pudo guardar el producto.'
+    formError.value = 'No se pudo guardar el producto.'
   } finally {
     isSaving.value = false
   }
@@ -200,7 +141,7 @@ async function toggleActive(producto: Producto) {
   await updateDoc(doc(db, 'productos', producto.id), { active: !producto.active })
 }
 
-// --- Eliminar (con modal, no confirm()) -----------------------------------
+// --- Eliminar (solo productos antiguos, fuera del catálogo) ---------------
 const productToDelete = ref<Producto | null>(null)
 const isDeleting = ref(false)
 
@@ -215,12 +156,7 @@ async function confirmDelete() {
   if (!productToDelete.value) return
   isDeleting.value = true
   try {
-    const imagePath = productToDelete.value.imagePath
     await deleteDoc(doc(db, 'productos', productToDelete.value.id))
-    if (PRODUCT_IMAGES_ENABLED && imagePath) {
-      const { deleteProductImage } = await loadImageTools()
-      await deleteProductImage(imagePath)
-    }
     productToDelete.value = null
   } finally {
     isDeleting.value = false
@@ -235,113 +171,56 @@ async function confirmDelete() {
     <div class="flex items-center justify-between mb-4">
       <h1 class="font-serif text-xl font-bold text-white">Productos</h1>
       <button
-        v-if="!isFormOpen"
         type="button"
-        class="flex items-center gap-2 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
-        @click="openCreateForm"
+        :disabled="isSyncing"
+        class="flex items-center gap-2 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] disabled:opacity-50 text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
+        @click="syncCatalog"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />
         </svg>
-        Nuevo producto
+        {{ isSyncing ? 'Guardando...' : 'Guardar productos' }}
       </button>
     </div>
 
-    <!-- Formulario en línea -->
-    <div v-if="isFormOpen" class="bg-[#0e0e0e] border border-white/10 rounded-xl p-5 mb-6">
-      <p class="text-sm font-semibold text-[#c9a24b] mb-4">{{ editingId ? 'Editar producto' : 'Nuevo producto' }}</p>
+    <p v-if="syncMessage" class="text-xs mb-4" :class="syncError ? 'text-red-400' : 'text-[#34d399]'">{{ syncMessage }}</p>
+    <p v-else-if="missingCount > 0" class="text-xs text-[#f2b705] mb-4">
+      Hay {{ missingCount }} producto{{ missingCount === 1 ? '' : 's' }} del catálogo sin guardar en Firebase. Pulsa
+      «Guardar productos».
+    </p>
+
+    <!-- Formulario en línea: solo nombre y stock -->
+    <div v-if="editingProduct" class="bg-[#0e0e0e] border border-white/10 rounded-xl p-5 mb-6">
+      <p class="text-sm font-semibold text-[#c9a24b] mb-4">Editar producto</p>
 
       <form class="space-y-4" @submit.prevent="saveProduct">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs tracking-wide text-white/40 mb-1.5">NOMBRE <span class="text-[#c9a24b]">*</span></label>
-            <input
-              v-model="form.name"
-              type="text"
-              placeholder="Nombre del producto"
-              class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
-            />
-          </div>
-          <div>
-            <label class="block text-xs tracking-wide text-white/40 mb-1.5">MARCA</label>
-            <input
-              v-model="form.brand"
-              type="text"
-              placeholder="Marca / fabricante"
-              class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
-            />
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs tracking-wide text-white/40 mb-1.5">PRECIO (COP) <span class="text-[#c9a24b]">*</span></label>
-            <input
-              v-model="form.price"
-              type="number"
-              min="0"
-              placeholder="25000"
-              class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
-            />
-          </div>
-          <div>
-            <label class="block text-xs tracking-wide text-white/40 mb-1.5">STOCK</label>
-            <input
-              v-model="form.stock"
-              type="number"
-              min="0"
-              placeholder="10"
-              class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label class="block text-xs tracking-wide text-white/40 mb-1.5">DESCRIPCIÓN</label>
-          <input
-            v-model="form.description"
-            type="text"
-            placeholder="Descripción breve del producto"
-            class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
+        <div class="flex flex-col sm:flex-row gap-4">
+          <img
+            v-if="editingProduct.image"
+            :src="editingProduct.image"
+            :alt="editingProduct.name"
+            class="w-24 h-24 shrink-0 rounded-lg object-cover border border-white/10"
           />
-        </div>
-
-        <div v-if="PRODUCT_IMAGES_ENABLED">
-          <label class="block text-xs tracking-wide text-white/40 mb-1.5">IMAGEN</label>
-          <div class="flex items-center gap-4">
-            <div
-              class="w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-white/10 bg-[#151515] flex items-center justify-center"
-            >
-              <img v-if="imagePreview" :src="imagePreview" alt="Vista previa" class="w-full h-full object-cover" />
-              <svg v-else width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="text-white/20">
-                <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
-              </svg>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 grow">
+            <div>
+              <label class="block text-xs tracking-wide text-white/40 mb-1.5">NOMBRE <span class="text-[#c9a24b]">*</span></label>
+              <input
+                v-model="form.name"
+                type="text"
+                placeholder="Nombre del producto"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
+              />
             </div>
-            <div class="flex flex-col gap-2">
-              <div class="flex items-center gap-2">
-                <label
-                  class="cursor-pointer text-xs font-semibold text-white/70 border border-white/10 rounded-lg px-3 py-2 hover:border-white/25 hover:text-white transition"
-                >
-                  {{ imagePreview ? 'Cambiar imagen' : 'Subir imagen' }}
-                  <input
-                    ref="imageInput"
-                    type="file"
-                    :accept="ACCEPTED_IMAGE_TYPES"
-                    class="hidden"
-                    @change="onImageSelected"
-                  />
-                </label>
-                <button
-                  v-if="imagePreview"
-                  type="button"
-                  class="text-xs text-white/40 hover:text-red-400 transition"
-                  @click="removeImage"
-                >
-                  Quitar
-                </button>
-              </div>
-              <p class="text-[11px] text-white/30">JPG, PNG o WebP. Se optimiza automáticamente.</p>
+            <div>
+              <label class="block text-xs tracking-wide text-white/40 mb-1.5">STOCK</label>
+              <input
+                v-model="form.stock"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="10"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
+              />
             </div>
           </div>
         </div>
@@ -402,7 +281,7 @@ async function confirmDelete() {
             <p class="text-sm font-semibold text-white truncate">{{ producto.name }}</p>
             <p class="text-xs text-white/40 mb-1 truncate">{{ producto.brand }}</p>
             <p class="text-xs">
-              <span class="text-[#c9a24b] font-semibold">${{ producto.price.toLocaleString('es-CO') }}</span>
+              <span class="text-[#c9a24b] font-semibold">${{ (producto.price ?? 0).toLocaleString('es-CO') }}</span>
               <span class="text-white/30 mx-1.5">·</span>
               <span v-if="producto.stock <= 0" class="text-red-400 font-semibold">Agotado</span>
               <span v-else-if="producto.stock <= LOW_STOCK_THRESHOLD" class="text-[#f2b705] font-semibold">
@@ -427,6 +306,7 @@ async function confirmDelete() {
             </svg>
           </button>
           <button
+            v-if="!isCatalogProduct(producto)"
             type="button"
             class="w-9 h-9 flex items-center justify-center rounded-lg border border-white/10 text-white/50 hover:text-red-400 hover:border-red-400/30 transition"
             aria-label="Eliminar"
@@ -441,7 +321,7 @@ async function confirmDelete() {
       </div>
 
       <p v-if="productos.length === 0" class="text-sm text-white/30 text-center py-10 md:col-span-2">
-        Sin productos registrados todavía.
+        Sin productos registrados todavía. Pulsa «Guardar productos» para cargar el catálogo.
       </p>
     </div>
 
