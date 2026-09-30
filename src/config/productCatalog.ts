@@ -26,6 +26,14 @@ export const PRODUCT_CATALOG: CatalogProduct[] = [
     image: '/productsImg/nishman-01-gumgum.jpg',
   },
   {
+    id: 'nishman-02-sport',
+    name: 'Nishman 02 Sport',
+    brand: 'Nishman',
+    price: NISHMAN_WAX_PRICE,
+    description: 'Cera para peinar de fijación deportiva.',
+    image: '/productsImg/nishman-02-sport.jpg',
+  },
+  {
     id: 'nishman-03-flaming',
     name: 'Nishman 03 Flaming',
     brand: 'Nishman',

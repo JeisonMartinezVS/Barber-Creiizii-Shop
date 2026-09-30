@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { collection, onSnapshot, query, where } from 'firebase/firestore'
+import { collection, doc, increment, onSnapshot, query, setDoc, where, writeBatch } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { useAuthStore } from '../stores/auth'
-import { formatLocalDate, useBookingStore } from '../stores/booking'
+import { formatLocalDate, getSlotId, stockDeltaForStatusChange, useBookingStore } from '../stores/booking'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
 
 const authStore = useAuthStore()
@@ -20,6 +20,7 @@ interface Cita {
   status: CitaStatus
   customerName: string
   serviceName: string
+  productIds: string[] // solo en citas que descontaron stock al reservarse
 }
 
 // 'todos' solo existe para el admin — un empleado siempre ve lo suyo.
@@ -58,6 +59,7 @@ function subscribe() {
           time?: string
           customerName?: string
           serviceName?: string
+          productIds?: string[]
         }
         const date = data.dateTime ? formatLocalDate(data.dateTime.toDate()) : (data.date ?? '')
         const time = data.time ?? (data.dateTime ? data.dateTime.toDate().toTimeString().slice(0, 5) : '')
@@ -70,6 +72,7 @@ function subscribe() {
           time,
           customerName: data.customerName ?? '',
           serviceName: data.serviceName ?? '',
+          productIds: data.productIds ?? [],
         }
       })
       isLoading.value = false
@@ -254,6 +257,97 @@ const statusBreakdown = computed(() => {
     pct: Math.round(((counts[status] ?? 0) / total) * 100),
   }))
 })
+
+// --- Acciones de la tabla (igual que en la Agenda) --------------------------
+const STATUS_ACTIONS: CitaStatus[] = ['pendiente', 'confirmada', 'completada', 'cancelada', 'no_asistio']
+
+const actionError = ref('')
+
+async function releaseSlot(cita: Cita) {
+  await setDoc(
+    doc(db, 'disponibilidad', getSlotId(cita.barberoId, cita.date, cita.time)),
+    { status: 'cancelada' },
+    { merge: true },
+  ).catch(() => {
+    // Si el documento del horario nunca existió no hay nada que liberar.
+  })
+}
+
+// Cambiar estado: el ajuste de stock va en el mismo lote que la cita.
+const citaToStatus = ref<Cita | null>(null)
+const isChangingStatus = ref(false)
+
+function openStatus(cita: Cita) {
+  actionError.value = ''
+  citaToStatus.value = cita
+}
+function closeStatus() {
+  if (isChangingStatus.value) return
+  citaToStatus.value = null
+}
+async function setStatus(status: CitaStatus) {
+  const cita = citaToStatus.value
+  if (!cita || status === cita.status) return
+  isChangingStatus.value = true
+  actionError.value = ''
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'citas', cita.id), { status })
+  const delta = stockDeltaForStatusChange(cita.status, status)
+  if (delta !== 0) {
+    for (const productId of cita.productIds) {
+      batch.update(doc(db, 'productos', productId), { stock: increment(delta), stockCitaId: cita.id })
+    }
+  }
+  try {
+    await batch.commit()
+    if (status === 'cancelada') await releaseSlot(cita)
+  } catch (err) {
+    console.error('No se pudo cambiar el estado de la cita', err)
+    actionError.value =
+      delta === -1 && cita.productIds.length
+        ? `No se pudo reactivar la cita de ${cita.customerName}: alguno de sus productos no tiene stock.`
+        : 'No se pudo cambiar el estado de la cita. Intenta de nuevo.'
+  } finally {
+    isChangingStatus.value = false
+    citaToStatus.value = null
+  }
+}
+
+// Eliminar: una cita pendiente o confirmada devuelve sus productos al stock.
+const citaToDelete = ref<Cita | null>(null)
+const isDeleting = ref(false)
+
+function askDelete(cita: Cita) {
+  actionError.value = ''
+  citaToDelete.value = cita
+}
+function cancelDelete() {
+  if (isDeleting.value) return
+  citaToDelete.value = null
+}
+async function confirmDelete() {
+  const cita = citaToDelete.value
+  if (!cita) return
+  isDeleting.value = true
+  actionError.value = ''
+  try {
+    const batch = writeBatch(db)
+    batch.delete(doc(db, 'citas', cita.id))
+    if (cita.status === 'pendiente' || cita.status === 'confirmada') {
+      for (const productId of cita.productIds) {
+        batch.update(doc(db, 'productos', productId), { stock: increment(1), stockCitaId: cita.id })
+      }
+    }
+    await batch.commit()
+    await releaseSlot(cita)
+  } catch (err) {
+    console.error('No se pudo eliminar la cita', err)
+    actionError.value = 'No se pudo eliminar la cita. Intenta de nuevo.'
+  } finally {
+    isDeleting.value = false
+    citaToDelete.value = null
+  }
+}
 </script>
 
 <template>
@@ -379,8 +473,15 @@ const statusBreakdown = computed(() => {
           {{ selectedDay ? 'No hay citas registradas en este día.' : 'No hay citas registradas en este mes.' }}
         </p>
 
-        <div v-else class="overflow-x-auto -mx-5 px-5">
-          <table class="w-full text-sm min-w-[640px]">
+        <p
+          v-if="actionError"
+          class="mb-4 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-2.5"
+        >
+          {{ actionError }}
+        </p>
+
+        <div v-if="monthCitas.length > 0" class="overflow-x-auto -mx-5 px-5">
+          <table class="w-full text-sm min-w-[760px]">
             <thead>
               <tr class="text-left text-xs text-white/40 border-b border-white/10">
                 <th class="py-2 pr-4 font-medium">Fecha</th>
@@ -390,6 +491,7 @@ const statusBreakdown = computed(() => {
                 <th class="py-2 pr-4 font-medium">Servicio</th>
                 <th class="py-2 pr-4 font-medium">Estado</th>
                 <th class="py-2 pl-4 font-medium text-right">Total</th>
+                <th class="py-2 pl-4 font-medium text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -408,6 +510,35 @@ const statusBreakdown = computed(() => {
                   </span>
                 </td>
                 <td class="py-2.5 pl-4 text-right text-white/80 font-medium">${{ cita.total.toLocaleString('es-CO') }}</td>
+                <td class="py-2.5 pl-4">
+                  <div class="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      class="w-8 h-8 flex items-center justify-center rounded-lg border border-white/10 text-white/50 hover:text-[#c9a24b] hover:border-[#c9a24b]/40 transition"
+                      aria-label="Cambiar estado"
+                      title="Cambiar estado"
+                      @click="openStatus(cita)"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10" />
+                        <polyline points="1 20 1 14 7 14" />
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="w-8 h-8 flex items-center justify-center rounded-lg border border-white/10 text-white/50 hover:text-red-400 hover:border-red-400/30 transition"
+                      aria-label="Eliminar"
+                      title="Eliminar"
+                      @click="askDelete(cita)"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -458,5 +589,89 @@ const statusBreakdown = computed(() => {
         </div>
       </div>
     </template>
+
+    <!-- Modal: cambiar estado -->
+    <Teleport to="body">
+      <div
+        v-if="citaToStatus"
+        class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4"
+        @click.self="closeStatus"
+      >
+        <div class="w-full max-w-sm bg-[#0e0e0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+          <div class="px-6 pt-6 pb-4">
+            <p class="text-xs tracking-wide text-[#c9a24b] mb-1">CAMBIAR ESTADO</p>
+            <h2 class="font-serif text-lg font-bold text-white mb-1">{{ citaToStatus.customerName || 'Cita' }}</h2>
+            <p class="text-sm text-white/50 mb-5">
+              {{ formatTableDate(citaToStatus.date) }} · {{ citaToStatus.time || '—' }} · {{ citaToStatus.serviceName || '—' }}
+            </p>
+            <div class="space-y-2">
+              <button
+                v-for="status in STATUS_ACTIONS"
+                :key="status"
+                type="button"
+                :disabled="isChangingStatus || status === citaToStatus.status"
+                class="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg border transition disabled:cursor-default"
+                :class="status === citaToStatus.status ? 'bg-white/5' : 'hover:bg-white/5 disabled:opacity-50'"
+                :style="{ color: STATUS_COLORS[status], borderColor: `${STATUS_COLORS[status]}40` }"
+                @click="setStatus(status)"
+              >
+                {{ STATUS_LABELS[status] }}
+                <span v-if="status === citaToStatus.status" class="text-[11px] font-normal text-white/40">Actual</span>
+              </button>
+            </div>
+          </div>
+          <div class="flex items-center justify-end px-6 pb-6 pt-2">
+            <button
+              type="button"
+              :disabled="isChangingStatus"
+              class="text-sm font-semibold text-white/70 border border-white/10 rounded-lg px-4 py-2.5 hover:border-white/25 hover:text-white transition disabled:opacity-50"
+              @click="closeStatus"
+            >
+              {{ isChangingStatus ? 'Guardando...' : 'Cerrar' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Modal: confirmar eliminación -->
+    <Teleport to="body">
+      <div v-if="citaToDelete" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
+        <div class="w-full max-w-sm bg-[#0e0e0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+          <div class="px-6 pt-6 pb-4 text-center">
+            <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+            </div>
+            <h2 class="font-serif text-lg font-bold text-white mb-1">¿Eliminar esta cita?</h2>
+            <p class="text-sm text-white/50">
+              La cita de <span class="text-white font-semibold">{{ citaToDelete.customerName || 'este cliente' }}</span>
+              ({{ formatTableDate(citaToDelete.date) }} {{ citaToDelete.time }}, {{ citaToDelete.serviceName }}) se eliminará
+              permanentemente.
+            </p>
+          </div>
+          <div class="flex items-center gap-3 px-6 pb-6 pt-2">
+            <button
+              type="button"
+              :disabled="isDeleting"
+              class="flex-1 text-sm font-semibold text-white/70 border border-white/10 rounded-lg py-2.5 hover:border-white/25 hover:text-white transition disabled:opacity-50"
+              @click="cancelDelete"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              :disabled="isDeleting"
+              class="flex-1 text-sm font-semibold text-white bg-red-600 hover:bg-red-500 rounded-lg py-2.5 transition disabled:opacity-50"
+              @click="confirmDelete"
+            >
+              {{ isDeleting ? 'Eliminando...' : 'Eliminar' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
