@@ -64,13 +64,13 @@ const stats = computed(() => {
     {
       label: 'Citas hoy',
       value: String(today.length),
-      accent: '#c9a24b',
+      accent: '#4a8fe7',
       icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
     },
     {
       label: 'Este mes',
       value: String(thisMonth.length),
-      accent: '#5b9bf7',
+      accent: '#a78bfa',
       icon: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
     },
     {

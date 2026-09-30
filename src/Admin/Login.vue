@@ -53,7 +53,7 @@ async function handleSubmit() {
     <div class="w-full max-w-md">
       <div class="relative rounded-2xl">
         <div
-          class="absolute inset-x-6 -top-px h-px bg-gradient-to-r from-transparent via-[#c9a24b] to-transparent"
+          class="absolute inset-x-6 -top-px h-px bg-gradient-to-r from-transparent via-[#4a8fe7] to-transparent"
         ></div>
         <div class="bg-[#0e0e0e] border border-white/10 rounded-2xl px-8 py-10 shadow-2xl">
           <!-- Logo -->
@@ -78,7 +78,7 @@ async function handleSubmit() {
           <form class="space-y-5" @submit.prevent="handleSubmit">
             <!-- Usuario -->
             <div>
-              <label class="block text-xs tracking-wide text-[#c9a24b] mb-2">USUARIO</label>
+              <label class="block text-xs tracking-wide text-[#4a8fe7] mb-2">USUARIO</label>
               <div class="relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-white/30">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -91,14 +91,14 @@ async function handleSubmit() {
                   type="text"
                   placeholder="Tu usuario"
                   autocomplete="username"
-                  class="w-full bg-[#151515] border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/60 focus:ring-1 focus:ring-[#c9a24b]/30 transition"
+                  class="w-full bg-[#151515] border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#4a8fe7]/60 focus:ring-1 focus:ring-[#4a8fe7]/30 transition"
                 />
               </div>
             </div>
 
             <!-- Contraseña -->
             <div>
-              <label class="block text-xs tracking-wide text-[#c9a24b] mb-2">CONTRASEÑA</label>
+              <label class="block text-xs tracking-wide text-[#4a8fe7] mb-2">CONTRASEÑA</label>
               <div class="relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-white/30">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -111,7 +111,7 @@ async function handleSubmit() {
                   :type="showPassword ? 'text' : 'password'"
                   placeholder="Tu contraseña"
                   autocomplete="current-password"
-                  class="w-full bg-[#151515] border border-white/10 rounded-lg py-2.5 pl-10 pr-10 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/60 focus:ring-1 focus:ring-[#c9a24b]/30 transition"
+                  class="w-full bg-[#151515] border border-white/10 rounded-lg py-2.5 pl-10 pr-10 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#4a8fe7]/60 focus:ring-1 focus:ring-[#4a8fe7]/30 transition"
                 />
                 <button
                   type="button"
@@ -138,7 +138,7 @@ async function handleSubmit() {
             <button
               type="submit"
               :disabled="authStore.isLoading"
-              class="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] text-[#1a1408] font-semibold text-sm rounded-lg py-3 transition disabled:opacity-60"
+              class="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] text-white font-semibold text-sm rounded-lg py-3 transition disabled:opacity-60"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
@@ -157,7 +157,7 @@ async function handleSubmit() {
                   v-for="account in demoAccounts"
                   :key="account.username"
                   type="button"
-                  class="border border-white/10 rounded-lg py-2 text-xs text-white/70 hover:border-[#c9a24b]/40 hover:text-white transition"
+                  class="border border-white/10 rounded-lg py-2 text-xs text-white/70 hover:border-[#4a8fe7]/40 hover:text-white transition"
                   @click="fillDemoUser(account.username)"
                 >
                   {{ account.label }}

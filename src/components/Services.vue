@@ -76,10 +76,10 @@ onMounted(() => {
 <template>
   <section id="servicios" class="py-16 md:py-24 px-6">
     <div class="max-w-6xl mx-auto text-center">
-      <p class="flex items-center justify-center gap-3 text-xs tracking-[0.3em] text-[#c9a24b] mb-4">
-        <span class="w-8 h-px bg-[#c9a24b]/50"></span>
+      <p class="flex items-center justify-center gap-3 text-xs tracking-[0.3em] text-[#4a8fe7] mb-4">
+        <span class="w-8 h-px bg-[#4a8fe7]/50"></span>
         CATÁLOGO
-        <span class="w-8 h-px bg-[#c9a24b]/50"></span>
+        <span class="w-8 h-px bg-[#4a8fe7]/50"></span>
       </p>
 
       <h2 class="font-gothic text-white text-4xl md:text-5xl mb-4">

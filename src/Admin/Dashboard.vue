@@ -117,7 +117,7 @@ async function handleLogout() {
           class="flex flex-col items-center gap-1 px-3 py-1.5 rounded-lg shrink-0 border-b-2 transition"
           :class="
             route.name === item.name
-              ? 'text-[#c9a24b] border-[#c9a24b]'
+              ? 'text-[#4a8fe7] border-[#4a8fe7]'
               : item.enabled
                 ? 'text-white/50 border-transparent hover:text-white/80'
                 : 'text-white/20 border-transparent cursor-not-allowed'
@@ -140,7 +140,7 @@ async function handleLogout() {
           <div>
             <p class="text-white font-serif font-bold text-sm leading-tight">Creiizii</p>
             <p class="flex items-center gap-1 text-[11px] text-white/40">
-              <span class="w-1.5 h-1.5 rounded-full bg-[#c9a24b]"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-[#4a8fe7]"></span>
               {{ authStore.isAdmin ? 'Administrador' : 'Empleado' }}
             </p>
           </div>
@@ -154,7 +154,7 @@ async function handleLogout() {
             class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition"
             :class="[
               route.name === item.name
-                ? 'bg-[#3a2f12] text-[#e2b95a] border border-[#c9a24b]/30'
+                ? 'bg-[#0f2140] text-[#8cb8f5] border border-[#4a8fe7]/30'
                 : item.enabled
                   ? 'text-white/60 hover:bg-white/5 hover:text-white/90'
                   : 'text-white/20 cursor-not-allowed',

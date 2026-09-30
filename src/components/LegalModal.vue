@@ -100,7 +100,7 @@ watch(
           <div class="px-6 py-4 border-t border-white/10 flex justify-end shrink-0">
             <button
               type="button"
-              class="bg-linear-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] text-[#1a1408] font-semibold text-sm rounded-lg px-5 py-2 transition"
+              class="bg-linear-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] text-white font-semibold text-sm rounded-lg px-5 py-2 transition"
               @click="emit('close')"
             >
               Entendido

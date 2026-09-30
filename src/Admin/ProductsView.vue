@@ -173,7 +173,7 @@ async function confirmDelete() {
       <button
         type="button"
         :disabled="isSyncing"
-        class="flex items-center gap-2 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] disabled:opacity-50 text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
+        class="flex items-center gap-2 bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] disabled:opacity-50 text-white font-semibold text-sm rounded-lg px-4 py-2 transition"
         @click="syncCatalog"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -191,7 +191,7 @@ async function confirmDelete() {
 
     <!-- Formulario en línea: solo nombre y stock -->
     <div v-if="editingProduct" class="bg-[#0e0e0e] border border-white/10 rounded-xl p-5 mb-6">
-      <p class="text-sm font-semibold text-[#c9a24b] mb-4">Editar producto</p>
+      <p class="text-sm font-semibold text-[#4a8fe7] mb-4">Editar producto</p>
 
       <form class="space-y-4" @submit.prevent="saveProduct">
         <div class="flex flex-col sm:flex-row gap-4">
@@ -203,12 +203,12 @@ async function confirmDelete() {
           />
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 grow">
             <div>
-              <label class="block text-xs tracking-wide text-white/40 mb-1.5">NOMBRE <span class="text-[#c9a24b]">*</span></label>
+              <label class="block text-xs tracking-wide text-white/40 mb-1.5">NOMBRE <span class="text-[#4a8fe7]">*</span></label>
               <input
                 v-model="form.name"
                 type="text"
                 placeholder="Nombre del producto"
-                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#4a8fe7]/50"
               />
             </div>
             <div>
@@ -219,7 +219,7 @@ async function confirmDelete() {
                 min="0"
                 step="1"
                 placeholder="10"
-                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#4a8fe7]/50"
               />
             </div>
           </div>
@@ -231,7 +231,7 @@ async function confirmDelete() {
           <button
             type="submit"
             :disabled="isSaving"
-            class="flex items-center gap-2 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] disabled:opacity-50 text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
+            class="flex items-center gap-2 bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] disabled:opacity-50 text-white font-semibold text-sm rounded-lg px-4 py-2 transition"
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />
@@ -270,7 +270,7 @@ async function confirmDelete() {
           />
           <div
             v-else
-            class="w-12 h-12 shrink-0 rounded-lg flex items-center justify-center bg-[#3a2f12] text-[#c9a24b] border border-[#c9a24b]/20"
+            class="w-12 h-12 shrink-0 rounded-lg flex items-center justify-center bg-[#0f2140] text-[#4a8fe7] border border-[#4a8fe7]/20"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
@@ -281,7 +281,7 @@ async function confirmDelete() {
             <p class="text-sm font-semibold text-white truncate">{{ producto.name }}</p>
             <p class="text-xs text-white/40 mb-1 truncate">{{ producto.brand }}</p>
             <p class="text-xs">
-              <span class="text-[#c9a24b] font-semibold">${{ (producto.price ?? 0).toLocaleString('es-CO') }}</span>
+              <span class="text-[#4a8fe7] font-semibold">${{ (producto.price ?? 0).toLocaleString('es-CO') }}</span>
               <span class="text-white/30 mx-1.5">·</span>
               <span v-if="producto.stock <= 0" class="text-red-400 font-semibold">Agotado</span>
               <span v-else-if="producto.stock <= LOW_STOCK_THRESHOLD" class="text-[#f2b705] font-semibold">

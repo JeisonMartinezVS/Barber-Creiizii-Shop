@@ -100,7 +100,7 @@ async function saveSchedule() {
       <select
         v-if="authStore.isAdmin"
         v-model="targetBarberoId"
-        class="bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-[#c9a24b]/50"
+        class="bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-[#4a8fe7]/50"
       >
         <option v-for="barbero in bookingStore.barberos" :key="barbero.id" :value="barbero.id">
           {{ barbero.name }}
@@ -117,7 +117,7 @@ async function saveSchedule() {
           <p class="text-sm font-semibold text-white">{{ targetBarberoName }} — ¿Trabaja hoy?</p>
           <p class="text-xs text-white/40 mt-0.5">{{ today.label }}</p>
         </div>
-        <ToggleSwitch v-model="today.enabled" color="#c9a24b" />
+        <ToggleSwitch v-model="today.enabled" color="#4a8fe7" />
       </div>
 
       <!-- Horario semanal -->
@@ -132,23 +132,23 @@ async function saveSchedule() {
           :class="index !== schedule.length - 1 ? 'border-b border-white/5' : ''"
         >
           <div class="w-28 shrink-0 flex items-center gap-2">
-            <span class="text-sm" :class="index === todayIndex ? 'text-[#c9a24b] font-semibold' : 'text-white/70'">
+            <span class="text-sm" :class="index === todayIndex ? 'text-[#4a8fe7] font-semibold' : 'text-white/70'">
               {{ day.label }}
             </span>
             <span v-if="index === todayIndex" class="text-[10px] text-white/40">Hoy</span>
           </div>
-          <ToggleSwitch v-model="day.enabled" color="#c9a24b" />
+          <ToggleSwitch v-model="day.enabled" color="#4a8fe7" />
           <template v-if="day.enabled">
             <input
               v-model="day.start"
               type="time"
-              class="bg-[#151515] border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/80 focus:outline-none focus:border-[#c9a24b]/50"
+              class="bg-[#151515] border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/80 focus:outline-none focus:border-[#4a8fe7]/50"
             />
             <span class="text-xs text-white/40">a</span>
             <input
               v-model="day.end"
               type="time"
-              class="bg-[#151515] border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/80 focus:outline-none focus:border-[#c9a24b]/50"
+              class="bg-[#151515] border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white/80 focus:outline-none focus:border-[#4a8fe7]/50"
             />
           </template>
           <span v-else class="text-xs text-white/30 italic">No disponible</span>
@@ -161,7 +161,7 @@ async function saveSchedule() {
       <button
         type="button"
         :disabled="isSaving"
-        class="mt-5 flex items-center gap-2 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] disabled:opacity-50 text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2.5 transition"
+        class="mt-5 flex items-center gap-2 bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] disabled:opacity-50 text-white font-semibold text-sm rounded-lg px-4 py-2.5 transition"
         @click="saveSchedule"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

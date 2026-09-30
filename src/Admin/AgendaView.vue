@@ -36,7 +36,7 @@ const STATUS_CONFIG: Record<CitaStatus, { label: string; color: string; icon: st
   },
   confirmada: {
     label: 'Confirmada',
-    color: '#5b9bf7',
+    color: '#a78bfa',
     icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`,
   },
   completada: {
@@ -308,12 +308,12 @@ function refresh() {
             v-model="selectedDate"
             type="date"
             :min="todayStr"
-            class="flex-1 sm:flex-none bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-[#c9a24b]/50"
+            class="flex-1 sm:flex-none bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-[#4a8fe7]/50"
           />
         </div>
         <select
           v-model="selectedStatus"
-          class="w-full sm:w-auto bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-[#c9a24b]/50"
+          class="w-full sm:w-auto bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-[#4a8fe7]/50"
         >
           <option value="todos">Todos los estados</option>
           <option value="pendiente">Pendiente</option>
@@ -325,7 +325,7 @@ function refresh() {
         <select
           v-if="authStore.isAdmin"
           v-model="selectedBarber"
-          class="w-full sm:w-auto bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-[#c9a24b]/50"
+          class="w-full sm:w-auto bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/70 focus:outline-none focus:border-[#4a8fe7]/50"
         >
           <option value="todos">Todos los barberos</option>
           <option v-for="barbero in bookingStore.barberos" :key="barbero.id" :value="barbero.id">{{ barbero.name }}</option>
@@ -362,7 +362,7 @@ function refresh() {
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div class="flex items-center gap-4">
                 <div class="text-center w-14 shrink-0">
-                  <p class="text-[#c9a24b] font-bold text-sm">{{ cita.time }}</p>
+                  <p class="text-[#4a8fe7] font-bold text-sm">{{ cita.time }}</p>
                   <p class="text-white/30 text-xs">{{ WEEKDAY_SHORT[cita.dateTime.toDate().getDay()] }}</p>
                 </div>
                 <div class="min-w-0">
@@ -374,11 +374,11 @@ function refresh() {
 
               <div class="flex items-center justify-between sm:justify-end gap-3 flex-wrap sm:ml-auto pl-[4.5rem] sm:pl-0">
                 <div class="text-right">
-  <p class="text-sm font-bold text-[#c9a24b]">${{ cita.total.toLocaleString('es-CO') }}</p>
+  <p class="text-sm font-bold text-[#4a8fe7]">${{ cita.total.toLocaleString('es-CO') }}</p>
   <button
     v-if="cita.products?.length"
     type="button"
-    class="text-xs text-white/30 hover:text-[#c9a24b] transition underline underline-offset-2"
+    class="text-xs text-white/30 hover:text-[#4a8fe7] transition underline underline-offset-2"
     @click="openProducts(cita)"
   >
     incl. {{ cita.products.length }} producto{{ cita.products.length > 1 ? 's' : '' }}
@@ -450,7 +450,7 @@ function refresh() {
       <div class="px-6 pt-6 pb-4">
         <div class="flex items-start justify-between gap-4 mb-5">
           <div>
-            <p class="text-xs tracking-wide text-[#c9a24b] mb-1">PRODUCTOS</p>
+            <p class="text-xs tracking-wide text-[#4a8fe7] mb-1">PRODUCTOS</p>
             <h2 class="font-serif text-lg font-bold text-white">
               Productos de la cita
             </h2>
@@ -483,7 +483,7 @@ function refresh() {
               />
               <div
                 v-else
-                class="w-14 h-14 shrink-0 rounded-lg flex items-center justify-center bg-[#3a2f12] text-[#c9a24b] border border-[#c9a24b]/20"
+                class="w-14 h-14 shrink-0 rounded-lg flex items-center justify-center bg-[#0f2140] text-[#4a8fe7] border border-[#4a8fe7]/20"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4Z" />
@@ -502,7 +502,7 @@ function refresh() {
               </div>
             </div>
 
-            <p class="text-sm font-semibold text-[#c9a24b] shrink-0">
+            <p class="text-sm font-semibold text-[#4a8fe7] shrink-0">
               ${{ product.price.toLocaleString('es-CO') }}
             </p>
           </div>

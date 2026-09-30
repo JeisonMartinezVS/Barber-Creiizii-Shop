@@ -260,7 +260,7 @@ async function handleCancelStored() {
                   class="w-6 h-6 rounded-full border flex items-center justify-center"
                   :class="
                     index < store.currentStepIndex
-                      ? 'bg-primary border-primary text-[#1a1408]'
+                      ? 'bg-primary border-primary text-white'
                       : index === store.currentStepIndex
                         ? 'border-primary text-primary'
                         : 'border-white/15 text-white/30'
@@ -383,7 +383,7 @@ async function handleCancelStored() {
                 <p class="text-sm text-red-400 mb-4">Tu cita fue cancelada.</p>
                 <button
                   type="button"
-                  class="bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] text-[#1a1408] font-semibold text-sm rounded-lg px-6 py-2.5 transition"
+                  class="bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] text-white font-semibold text-sm rounded-lg px-6 py-2.5 transition"
                   @click="store.close"
                 >
                   Cerrar
@@ -414,7 +414,7 @@ async function handleCancelStored() {
                   @click="store.selectBarbero(barbero.id)"
                 >
                   <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-[#e2b95a] bg-gradient-to-b from-[#5a4420] to-[#3a2f12] border border-primary/30">
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-[#8cb8f5] bg-gradient-to-b from-[#1a3a6b] to-[#0f2140] border border-primary/30">
                       {{ initial(barbero.name) }}
                     </div>
                     <div>
@@ -436,7 +436,7 @@ async function handleCancelStored() {
                 class="flex items-center justify-between px-4 py-3 rounded-xl border border-white/10 mb-5"
               >
                 <div class="flex items-center gap-3">
-                  <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-[#e2b95a] bg-gradient-to-b from-[#5a4420] to-[#3a2f12] border border-primary/30">
+                  <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-[#8cb8f5] bg-gradient-to-b from-[#1a3a6b] to-[#0f2140] border border-primary/30">
                     {{ initial(store.selectedBarbero.name) }}
                   </div>
                   <p class="text-sm font-semibold text-white">{{ store.selectedBarbero.name }}</p>
@@ -509,7 +509,7 @@ async function handleCancelStored() {
                     !isDayEnabled(day)
                       ? 'border-white/5 text-white/20 cursor-not-allowed'
                       : store.selectedDate && isSameDay(store.selectedDate, day)
-                        ? 'bg-gradient-to-b from-[#b6903f] to-[#8f7130] border-transparent text-[#1a1408]'
+                        ? 'bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] border-transparent text-white'
                         : 'border-white/10 text-white/70 hover:border-white/25'
                   "
                   @click="isDayEnabled(day) && store.selectDate(day)"
@@ -572,7 +572,7 @@ async function handleCancelStored() {
                   class="rounded-lg border py-2 text-sm transition"
                   :class="
                     store.selectedTime === slot
-                      ? 'bg-gradient-to-b from-[#b6903f] to-[#8f7130] border-transparent text-[#1a1408] font-semibold'
+                      ? 'bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] border-transparent text-white font-semibold'
                       : 'border-white/10 text-white/70 hover:border-white/25'
                   "
                   @click="store.selectTime(slot)"
@@ -649,7 +649,7 @@ async function handleCancelStored() {
                   <input
                     v-model="store.acceptedPrivacy"
                     type="checkbox"
-                    class="mt-0.5 w-4 h-4 shrink-0 accent-[#c9a24b]"
+                    class="mt-0.5 w-4 h-4 shrink-0 accent-[#4a8fe7]"
                   />
                   <span class="text-xs text-white/60 leading-relaxed">
                     Al confirmar la reserva autorizo a North Side Barber Club a tratar mi nombre y mi celular para
@@ -727,7 +727,7 @@ async function handleCancelStored() {
                       class="w-7 h-7 rounded-md flex items-center justify-center border"
                       :class="
                         store.selectedProductIds.has(product.id)
-                          ? 'bg-gradient-to-b from-[#b6903f] to-[#8f7130] border-transparent text-[#1a1408]'
+                          ? 'bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] border-transparent text-white'
                           : 'border-white/15 text-white/40'
                       "
                     >
@@ -782,7 +782,7 @@ async function handleCancelStored() {
               v-else-if="store.currentStep === 'Fecha'"
               type="button"
               :disabled="!store.isFechaValid"
-              class="flex items-center gap-1 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] disabled:opacity-40 disabled:cursor-not-allowed text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
+              class="flex items-center gap-1 bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-lg px-4 py-2 transition"
               @click="store.next"
             >
               Continuar
@@ -793,7 +793,7 @@ async function handleCancelStored() {
               v-else-if="store.currentStep === 'Datos' && !store.isLastStep"
               type="button"
               :disabled="!store.isDatosValid"
-              class="flex items-center gap-1 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] disabled:opacity-40 disabled:cursor-not-allowed text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
+              class="flex items-center gap-1 bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-lg px-4 py-2 transition"
               @click="store.next"
             >
               Continuar
@@ -804,7 +804,7 @@ async function handleCancelStored() {
               v-else-if="store.isLastStep"
               type="button"
               :disabled="store.isSubmitting || !store.isDatosValid"
-              class="flex items-center gap-1.5 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] disabled:opacity-50 text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
+              class="flex items-center gap-1.5 bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] disabled:opacity-50 text-white font-semibold text-sm rounded-lg px-4 py-2 transition"
               @click="store.confirmBooking"
             >
               {{ store.isSubmitting ? 'Guardando...' : `Confirmar — ${formatCOP(store.total)}` }}

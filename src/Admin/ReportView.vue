@@ -196,11 +196,11 @@ const cortesMes = computed(() => thisMonthCitas.value.filter((c) => c.status ===
 const pendientes = computed(() => citas.value.filter((c) => c.status === 'pendiente').length)
 
 const kpis = computed(() => [
-  { label: 'Reservas este mes', value: String(totalReservasMes.value), accent: '#5b9bf7' },
+  { label: 'Reservas este mes', value: String(totalReservasMes.value), accent: '#a78bfa' },
   { label: 'Ingresos este mes', value: `$${ingresosMes.value.toLocaleString('es-CO')}`, accent: '#34d399' },
-  { label: 'Ingresos totales', value: `$${ingresosTotales.value.toLocaleString('es-CO')}`, accent: '#c9a24b' },
-  { label: 'Cortes completados hoy', value: String(cortesHoy.value), accent: '#c9a24b' },
-  { label: 'Cortes completados este mes', value: String(cortesMes.value), accent: '#5b9bf7' },
+  { label: 'Ingresos totales', value: `$${ingresosTotales.value.toLocaleString('es-CO')}`, accent: '#4a8fe7' },
+  { label: 'Cortes completados hoy', value: String(cortesHoy.value), accent: '#4a8fe7' },
+  { label: 'Cortes completados este mes', value: String(cortesMes.value), accent: '#a78bfa' },
   { label: 'Pendientes', value: String(pendientes.value), accent: '#f2b705' },
 ])
 
@@ -240,7 +240,7 @@ const STATUS_LABELS: Record<CitaStatus, string> = {
 }
 const STATUS_COLORS: Record<CitaStatus, string> = {
   pendiente: '#f2b705',
-  confirmada: '#5b9bf7',
+  confirmada: '#a78bfa',
   completada: '#34d399',
   cancelada: '#f87171',
   no_asistio: '#f2994a',
@@ -361,7 +361,7 @@ async function confirmDelete() {
       <select
         v-if="authStore.isAdmin"
         v-model="scope"
-        class="bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-[#c9a24b]/50"
+        class="bg-[#0e0e0e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-[#4a8fe7]/50"
       >
         <option value="todos">Todo el equipo</option>
         <option v-for="barbero in bookingStore.barberos" :key="barbero.id" :value="barbero.id">
@@ -404,7 +404,7 @@ async function confirmDelete() {
             >
               <div
                 class="w-full rounded-t transition-all"
-                :class="day.dateStr === todayStr ? 'bg-[#c9a24b]' : 'bg-[#5b9bf7]/50'"
+                :class="day.dateStr === todayStr ? 'bg-[#4a8fe7]' : 'bg-white/15'"
                 :style="{ height: `${Math.max(3, (day.value / maxDailyIncome) * 100)}%` }"
                 :title="`$${day.value.toLocaleString('es-CO')}`"
               ></div>
@@ -448,7 +448,7 @@ async function confirmDelete() {
               v-model="selectedMonth"
               type="month"
               title="Filtrar por mes"
-              class="bg-[#161616] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-[#c9a24b]/50"
+              class="bg-[#161616] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-[#4a8fe7]/50"
             />
             <input
               v-model="selectedDay"
@@ -456,7 +456,7 @@ async function confirmDelete() {
               title="Filtrar por día"
               :min="monthBounds.min"
               :max="monthBounds.max"
-              class="bg-[#161616] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-[#c9a24b]/50"
+              class="bg-[#161616] border border-white/10 rounded-lg px-3 py-2 text-sm text-white/80 focus:outline-none focus:border-[#4a8fe7]/50"
             />
             <button
               v-if="selectedDay"
@@ -514,7 +514,7 @@ async function confirmDelete() {
                   <div class="flex items-center justify-end gap-2">
                     <button
                       type="button"
-                      class="w-8 h-8 flex items-center justify-center rounded-lg border border-white/10 text-white/50 hover:text-[#c9a24b] hover:border-[#c9a24b]/40 transition"
+                      class="w-8 h-8 flex items-center justify-center rounded-lg border border-white/10 text-white/50 hover:text-[#4a8fe7] hover:border-[#4a8fe7]/40 transition"
                       aria-label="Cambiar estado"
                       title="Cambiar estado"
                       @click="openStatus(cita)"
@@ -569,7 +569,7 @@ async function confirmDelete() {
                 class="min-w-8 px-2 py-1.5 text-xs rounded-lg border transition-colors"
                 :class="
                   page === currentPage
-                    ? 'border-[#c9a24b]/60 bg-[#c9a24b]/15 text-[#c9a24b] font-semibold'
+                    ? 'border-[#4a8fe7]/60 bg-[#4a8fe7]/15 text-[#4a8fe7] font-semibold'
                     : 'border-white/10 text-white/60 hover:text-white hover:border-white/30'
                 "
                 @click="goToPage(page)"
@@ -599,7 +599,7 @@ async function confirmDelete() {
       >
         <div class="w-full max-w-sm bg-[#0e0e0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
           <div class="px-6 pt-6 pb-4">
-            <p class="text-xs tracking-wide text-[#c9a24b] mb-1">CAMBIAR ESTADO</p>
+            <p class="text-xs tracking-wide text-[#4a8fe7] mb-1">CAMBIAR ESTADO</p>
             <h2 class="font-serif text-lg font-bold text-white mb-1">{{ citaToStatus.customerName || 'Cita' }}</h2>
             <p class="text-sm text-white/50 mb-5">
               {{ formatTableDate(citaToStatus.date) }} · {{ citaToStatus.time || '—' }} · {{ citaToStatus.serviceName || '—' }}

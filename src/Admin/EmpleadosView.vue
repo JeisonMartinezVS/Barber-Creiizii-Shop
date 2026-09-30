@@ -211,7 +211,7 @@ async function submitNewEmployee() {
       <button
         v-if="authStore.isAdmin"
         type="button"
-        class="flex items-center gap-2 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
+        class="flex items-center gap-2 bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] text-white font-semibold text-sm rounded-lg px-4 py-2 transition"
         @click="openModal"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -229,7 +229,7 @@ async function submitNewEmployee() {
         class="bg-[#0e0e0e] border border-white/10 rounded-xl px-5 py-4 flex items-center justify-between"
       >
         <div class="flex items-center gap-4">
-          <div class="hidden w-10 h-10 rounded-full md:flex items-center justify-center text-sm font-bold text-[#e2b95a] bg-gradient-to-b from-[#5a4420] to-[#3a2f12] border border-[#c9a24b]/30">
+          <div class="hidden w-10 h-10 rounded-full md:flex items-center justify-center text-sm font-bold text-[#8cb8f5] bg-gradient-to-b from-[#1a3a6b] to-[#0f2140] border border-[#4a8fe7]/30">
             {{ initial(empleado.name) }}
           </div>
           <div>
@@ -237,11 +237,11 @@ async function submitNewEmployee() {
               <p class="text-sm font-semibold text-white">{{ empleado.name }}</p>
               <span
                 v-if="empleado.role === 'admin'"
-                class="text-[10px] uppercase tracking-wide border border-[#c9a24b]/40 text-[#c9a24b] rounded px-1.5 py-0.5"
+                class="text-[10px] uppercase tracking-wide border border-[#4a8fe7]/40 text-[#4a8fe7] rounded px-1.5 py-0.5"
               >
                 Admin
               </span>
-              <span v-else class="text-[10px] uppercase tracking-wide border border-[#5b9bf7]/40 text-[#5b9bf7] rounded px-1.5 py-0.5">
+              <span v-else class="text-[10px] uppercase tracking-wide border border-[#a78bfa]/40 text-[#a78bfa] rounded px-1.5 py-0.5">
                 Empleado
               </span>
             </div>
@@ -303,7 +303,7 @@ async function submitNewEmployee() {
 
           <!-- Éxito: enviar credenciales por WhatsApp -->
           <div v-if="createdEmployee" class="px-6 py-5">
-            <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-[#c9a24b]/10 border border-[#c9a24b]/30 flex items-center justify-center text-[#c9a24b]">
+            <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-[#4a8fe7]/10 border border-[#4a8fe7]/30 flex items-center justify-center text-[#4a8fe7]">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
@@ -316,7 +316,7 @@ async function submitNewEmployee() {
               <p class="text-xs text-white/40 mb-1">USUARIO</p>
               <p class="text-sm text-white font-mono mb-2">{{ createdEmployee.username }}</p>
               <p class="text-xs text-white/40 mb-1">CONTRASEÑA TEMPORAL</p>
-              <p class="text-lg text-[#c9a24b] font-mono tracking-wide">{{ createdEmployee.password }}</p>
+              <p class="text-lg text-[#4a8fe7] font-mono tracking-wide">{{ createdEmployee.password }}</p>
             </div>
             <a
               :href="whatsappUrl(createdEmployee.phone, createdEmployee.name, createdEmployee.username, createdEmployee.password)"
@@ -346,7 +346,7 @@ async function submitNewEmployee() {
                 v-model="form.name"
                 type="text"
                 placeholder="Nombre del empleado"
-                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#4a8fe7]/50"
               />
             </div>
 
@@ -356,7 +356,7 @@ async function submitNewEmployee() {
                 v-model="form.email"
                 type="text"
                 placeholder="empleado@creiizii.com o solo 'yeison'"
-                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#4a8fe7]/50"
               />
             </div>
 
@@ -366,7 +366,7 @@ async function submitNewEmployee() {
                 v-model="form.phone"
                 type="tel"
                 placeholder="+57 300 000 0000"
-                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#4a8fe7]/50"
               />
             </div>
 
@@ -389,7 +389,7 @@ async function submitNewEmployee() {
               <button
                 type="submit"
                 :disabled="isSubmitting"
-                class="bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] disabled:opacity-50 text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
+                class="bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] disabled:opacity-50 text-white font-semibold text-sm rounded-lg px-4 py-2 transition"
               >
                 {{ isSubmitting ? 'Creando...' : 'Crear empleado' }}
               </button>

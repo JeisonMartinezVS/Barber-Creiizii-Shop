@@ -59,7 +59,7 @@ async function handleLogout() {
     <div class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center px-4">
       <div class="relative w-full max-w-md" role="dialog" aria-modal="true" aria-labelledby="change-password-title">
         <div
-          class="absolute inset-x-6 -top-px h-px bg-linear-to-r from-transparent via-[#c9a24b] to-transparent"
+          class="absolute inset-x-6 -top-px h-px bg-linear-to-r from-transparent via-[#4a8fe7] to-transparent"
         ></div>
         <form
           class="bg-[#0e0e0e] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
@@ -67,7 +67,7 @@ async function handleLogout() {
         >
           <div class="px-6 pt-6 pb-4 border-b border-white/10">
             <div
-              class="w-12 h-12 mb-3 rounded-full bg-[#c9a24b]/10 border border-[#c9a24b]/30 flex items-center justify-center text-[#c9a24b]"
+              class="w-12 h-12 mb-3 rounded-full bg-[#4a8fe7]/10 border border-[#4a8fe7]/30 flex items-center justify-center text-[#4a8fe7]"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="11" width="18" height="11" rx="2" />
@@ -89,7 +89,7 @@ async function handleLogout() {
                 :type="showPasswords ? 'text' : 'password'"
                 autocomplete="new-password"
                 placeholder="Mínimo 8 caracteres"
-                class="w-full bg-[#151515] border border-white/10 rounded-lg py-2.5 px-4 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/60 focus:ring-1 focus:ring-[#c9a24b]/30 transition"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg py-2.5 px-4 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#4a8fe7]/60 focus:ring-1 focus:ring-[#4a8fe7]/30 transition"
               />
             </div>
 
@@ -101,12 +101,12 @@ async function handleLogout() {
                 :type="showPasswords ? 'text' : 'password'"
                 autocomplete="new-password"
                 placeholder="Repite la nueva contraseña"
-                class="w-full bg-[#151515] border border-white/10 rounded-lg py-2.5 px-4 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/60 focus:ring-1 focus:ring-[#c9a24b]/30 transition"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg py-2.5 px-4 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#4a8fe7]/60 focus:ring-1 focus:ring-[#4a8fe7]/30 transition"
               />
             </div>
 
             <label class="flex items-center gap-2 text-xs text-white/50 cursor-pointer select-none">
-              <input v-model="showPasswords" type="checkbox" class="accent-[#c9a24b]" />
+              <input v-model="showPasswords" type="checkbox" class="accent-[#4a8fe7]" />
               Mostrar contraseñas
             </label>
 
@@ -136,7 +136,7 @@ async function handleLogout() {
             <button
               type="submit"
               :disabled="!canSubmit"
-              class="bg-linear-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] disabled:opacity-40 disabled:cursor-not-allowed text-[#1a1408] font-semibold text-sm rounded-lg px-5 py-2 transition"
+              class="bg-linear-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-lg px-5 py-2 transition"
             >
               {{ isSaving ? 'Guardando...' : 'Cambiar contraseña' }}
             </button>

@@ -70,7 +70,7 @@ export default defineComponent({
           v-for="value in config?.menu"
           :key="value.name"
           :to="value.link"
-          class="text-sm font-semibold text-white/80 hover:text-[#c9a24b] transition"
+          class="text-sm font-semibold text-white/80 hover:text-[#4a8fe7] transition"
           >{{ value.name }}</router-link
         >
       </div>
@@ -93,7 +93,7 @@ export default defineComponent({
         </a>
         <button
           type="button"
-          class="flex items-center gap-2 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
+          class="flex items-center gap-2 bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] text-white font-semibold text-sm rounded-lg px-4 py-2 transition"
           @click="bookingStore.open"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -130,7 +130,7 @@ export default defineComponent({
           v-for="value in config?.menu"
           :key="value.name"
           :to="value.link"
-          class="py-3 text-base text-white/90 hover:text-[#c9a24b] transition border-b border-white/5"
+          class="py-3 text-base text-white/90 hover:text-[#4a8fe7] transition border-b border-white/5"
           >{{ value.name }}</router-link
         >
       </nav>
@@ -154,7 +154,7 @@ export default defineComponent({
 
       <button
         type="button"
-        class="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] text-[#1a1408] font-semibold text-sm rounded-lg py-3 mt-4 transition"
+        class="w-full flex items-center justify-center gap-2 bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] text-white font-semibold text-sm rounded-lg py-3 mt-4 transition"
         @click="openReservationFromMobile"
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

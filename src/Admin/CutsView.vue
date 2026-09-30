@@ -305,7 +305,7 @@ async function confirmDelete() {
         <button
           v-if="!isFormOpen"
           type="button"
-          class="flex items-center gap-2 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
+          class="flex items-center gap-2 bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] text-white font-semibold text-sm rounded-lg px-4 py-2 transition"
           @click="openCreateForm"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -317,26 +317,26 @@ async function confirmDelete() {
 
       <!-- Formulario en línea -->
       <div v-if="isFormOpen" class="bg-[#0e0e0e] border border-white/10 rounded-xl p-5 mb-6">
-        <p class="text-sm font-semibold text-[#c9a24b] mb-4">{{ editingId ? 'Editar corte' : 'Nuevo corte' }}</p>
+        <p class="text-sm font-semibold text-[#4a8fe7] mb-4">{{ editingId ? 'Editar corte' : 'Nuevo corte' }}</p>
 
         <form class="space-y-4" @submit.prevent="saveProduct">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs tracking-wide text-white/40 mb-1.5">NOMBRE <span class="text-[#c9a24b]">*</span></label>
+              <label class="block text-xs tracking-wide text-white/40 mb-1.5">NOMBRE <span class="text-[#4a8fe7]">*</span></label>
               <input
                 v-model="form.name"
                 type="text"
                 placeholder="Nombre del corte"
-                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#4a8fe7]/50"
               />
             </div>
             <div>
-              <label class="block text-xs tracking-wide text-white/40 mb-1.5">PRECIO <span class="text-[#c9a24b]">*</span></label>
+              <label class="block text-xs tracking-wide text-white/40 mb-1.5">PRECIO <span class="text-[#4a8fe7]">*</span></label>
               <input
                 v-model="form.price"
                 type="text"
                 placeholder="25.000"
-                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#4a8fe7]/50"
               />
             </div>
           </div>
@@ -348,14 +348,14 @@ async function confirmDelete() {
                 v-model="form.duration"
                 type="text"
                 placeholder="30 min"
-                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#c9a24b]/50"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#4a8fe7]/50"
               />
             </div>
             <div>
-              <label class="block text-xs tracking-wide text-white/40 mb-1.5">SERVICIO <span class="text-[#c9a24b]">*</span></label>
+              <label class="block text-xs tracking-wide text-white/40 mb-1.5">SERVICIO <span class="text-[#4a8fe7]">*</span></label>
               <select
                 v-model="form.title"
-                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#c9a24b]/50"
+                class="w-full bg-[#151515] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#4a8fe7]/50"
               >
                 <option v-for="title in serviceTitles" :key="title" :value="title" class="bg-[#151515]">{{ title }}</option>
               </select>
@@ -368,7 +368,7 @@ async function confirmDelete() {
             <button
               type="submit"
               :disabled="isSaving"
-              class="flex items-center gap-2 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] disabled:opacity-50 text-[#1a1408] font-semibold text-sm rounded-lg px-4 py-2 transition"
+              class="flex items-center gap-2 bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] disabled:opacity-50 text-white font-semibold text-sm rounded-lg px-4 py-2 transition"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" /><polyline points="17 21 17 13 7 13 7 21" /><polyline points="7 3 7 8 15 8" />
@@ -402,7 +402,7 @@ async function confirmDelete() {
           class="bg-[#0e0e0e] border border-white/10 rounded-xl px-5 py-4 flex items-center justify-between"
         >
           <div class="flex items-center gap-4 min-w-0">
-            <div class="w-10 h-10 shrink-0 rounded-lg flex items-center justify-center bg-[#3a2f12] text-[#c9a24b] border border-[#c9a24b]/20">
+            <div class="w-10 h-10 shrink-0 rounded-lg flex items-center justify-center bg-[#0f2140] text-[#4a8fe7] border border-[#4a8fe7]/20">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
                 <polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
@@ -413,7 +413,7 @@ async function confirmDelete() {
               <p class="text-xs text-white/40 mb-1 truncate">
                 {{ producto.title || 'Sin servicio' }}<span v-if="producto.duration"> · {{ producto.duration }}</span>
               </p>
-              <p class="text-xs"><span class="text-[#c9a24b] font-semibold">${{ producto.price || '0' }}</span></p>
+              <p class="text-xs"><span class="text-[#4a8fe7] font-semibold">${{ producto.price || '0' }}</span></p>
             </div>
           </div>
 

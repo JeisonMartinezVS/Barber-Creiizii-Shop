@@ -38,10 +38,10 @@ export default defineComponent({
         decoding="async"
       />
 
-      <p class="flex items-center gap-3 text-xs tracking-[0.3em] text-[#c9a24b] mt-2">
-        <span class="w-8 h-px bg-[#c9a24b]/50"></span>
+      <p class="flex items-center gap-3 text-xs tracking-[0.3em] text-[#4a8fe7] mt-2">
+        <span class="w-8 h-px bg-[#4a8fe7]/50"></span>
         MEDELLÍN, COLOMBIA
-        <span class="w-8 h-px bg-[#c9a24b]/50"></span>
+        <span class="w-8 h-px bg-[#4a8fe7]/50"></span>
       </p>
 
       <p class="text-gray-300 max-w-xl mt-2">
@@ -50,7 +50,7 @@ export default defineComponent({
 
       <button
         type="button"
-        class="flex items-center gap-2 bg-gradient-to-b from-[#b6903f] to-[#8f7130] hover:from-[#c39c47] hover:to-[#9c7c37] text-[#1a1408] font-semibold rounded-lg px-6 py-3 mt-4 transition"
+        class="flex items-center gap-2 bg-gradient-to-b from-[#3f7fd6] to-[#2b5fa8] hover:from-[#5596ea] hover:to-[#336bb8] text-white font-semibold rounded-lg px-6 py-3 mt-4 transition"
         @click="bookingStore.open"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
