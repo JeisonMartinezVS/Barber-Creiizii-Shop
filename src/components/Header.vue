@@ -132,14 +132,14 @@ export default defineComponent({
 
       <div class="grid grid-cols-2 gap-3 mt-6">
         <a
-          href="#"
+          href="https://wa.me/573001234567"
           class="flex items-center justify-center gap-2 border border-green-500/40 text-green-400 rounded-lg py-2.5 text-sm font-semibold hover:bg-green-500/10 transition"
         >
           <Whatsapp class="w-4 h-4" />
           WhatsApp
         </a>
         <a
-          href="#"
+          href="https://instagram.com/creiizii_barber_shop"
           class="flex items-center justify-center gap-2 border border-pink-500/40 text-pink-400 rounded-lg py-2.5 text-sm font-semibold hover:bg-pink-500/10 transition"
         >
           <Instagram class="w-4 h-4" />
