@@ -73,14 +73,14 @@ export default defineComponent({
       <!-- Redes + Reservar (escritorio) -->
       <div class="hidden md:flex items-center gap-2">
         <a
-          href="#"
+          href="https://wa.me/573014735677"
           class="w-9 h-9 rounded-md bg-white/5 border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:border-white/25 transition"
           aria-label="WhatsApp"
         >
           <Whatsapp class="w-4 h-4" />
         </a>
         <a
-          href="#"
+          href="https://instagram.com/creiizii_barber_shop"
           class="w-9 h-9 rounded-md bg-white/5 border border-white/10 flex items-center justify-center text-white/70 hover:text-white hover:border-white/25 transition"
           aria-label="Instagram"
         >
@@ -132,7 +132,7 @@ export default defineComponent({
 
       <div class="grid grid-cols-2 gap-3 mt-6">
         <a
-          href="https://wa.me/573001234567"
+          href="https://wa.me/573014735677"
           class="flex items-center justify-center gap-2 border border-green-500/40 text-green-400 rounded-lg py-2.5 text-sm font-semibold hover:bg-green-500/10 transition"
         >
           <Whatsapp class="w-4 h-4" />
