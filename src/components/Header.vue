@@ -55,11 +55,11 @@ export default defineComponent({
   >
     <div class="flex justify-between items-center max-w-10/12 mx-auto p-4">
       <!-- Logo -->
-      <router-link to="/" class="font-gothic text-2xl text-white" @click="closeMobileMenu">
+      <router-link to="/" class="font-gothic text-2xl text-white flex items-center" @click="closeMobileMenu">
         <img
           src="../../public/icon.png"
           alt="North Side"
-          class="h-10 md:h-12 object-contain"
+          class="h-9 md:h-12 object-contain"
         />
         {{ config?.Titulo ?? 'North Side' }}
       </router-link>
