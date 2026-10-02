@@ -614,6 +614,26 @@ async function handleCancelStored() {
               </div>
 
               <div class="space-y-4">
+                <!-- Cliente recordado en este dispositivo: no se le vuelven a pedir los datos. -->
+                <div
+                  v-if="store.savedCustomer"
+                  class="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-primary/30 bg-primary/5"
+                >
+                  <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-[#8cb8f5] bg-gradient-to-b from-[#1a3a6b] to-[#0f2140] border border-primary/30 shrink-0">
+                      {{ initial(store.savedCustomer.name) }}
+                    </div>
+                    <div class="min-w-0">
+                      <p class="text-sm font-semibold text-white truncate">{{ store.savedCustomer.name }}</p>
+                      <p class="text-xs text-white/40">{{ store.savedCustomer.phone }}</p>
+                    </div>
+                  </div>
+                  <button type="button" class="text-xs font-semibold text-primary hover:underline shrink-0" @click="store.forgetCustomer">
+                    ¿No eres tú?
+                  </button>
+                </div>
+
+                <template v-else>
                 <div>
                   <label for="customer-name" class="block text-xs tracking-wide text-white/40 mb-2">
                     NOMBRE COMPLETO <span class="text-primary">*</span>
@@ -649,6 +669,7 @@ async function handleCancelStored() {
                     Escribe un número válido (solo números, espacios, +, guiones o paréntesis).
                   </p>
                 </div>
+                </template>
 
                 <!-- Autorización de tratamiento de datos (Ley 1581 de 2012, art. 9). Viene
                      marcada; se otorga al confirmar la reserva con la casilla marcada. -->

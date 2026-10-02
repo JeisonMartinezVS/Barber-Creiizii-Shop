@@ -10,6 +10,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
   Timestamp,
   where,
   writeBatch,
@@ -148,6 +149,51 @@ function clearStoredBooking() {
   }
 }
 
+// --- Cliente recordado ------------------------------------------------------
+// Tras la primera reserva, nombre y celular quedan en este dispositivo para no
+// volver a pedirlos. En Firestore el cliente se guarda en clientes/{celular},
+// así el mismo número nunca crea dos clientes, aunque reserve desde otro equipo.
+
+export interface SavedCustomer {
+  name: string
+  phone: string
+}
+
+const CUSTOMER_STORAGE_KEY = 'creiizii_customer'
+
+/**
+ * Deja solo los dígitos del celular y quita el indicativo de Colombia, para que
+ * "+57 300 000 0000" y "3000000000" sean el mismo cliente.
+ */
+export function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '')
+  return digits.length === 12 && digits.startsWith('57') ? digits.slice(2) : digits
+}
+
+function readSavedCustomer(): SavedCustomer | null {
+  try {
+    const raw = localStorage.getItem(CUSTOMER_STORAGE_KEY)
+    const parsed = raw ? (JSON.parse(raw) as Partial<SavedCustomer>) : null
+    return parsed?.name && parsed?.phone ? { name: parsed.name, phone: parsed.phone } : null
+  } catch {
+    return null
+  }
+}
+function writeSavedCustomer(customer: SavedCustomer) {
+  try {
+    localStorage.setItem(CUSTOMER_STORAGE_KEY, JSON.stringify(customer))
+  } catch {
+    // Sin almacenamiento local: la próxima vez se vuelven a pedir los datos.
+  }
+}
+function clearSavedCustomer() {
+  try {
+    localStorage.removeItem(CUSTOMER_STORAGE_KEY)
+  } catch {
+    // Igual que arriba.
+  }
+}
+
 // Forma de los servicios guardados en `config.services`, la misma que
 // escribe CutsView.vue.
 interface RawServiceItem {
@@ -271,6 +317,9 @@ export const useBookingStore = defineStore('booking', () => {
   // marcada (conducta inequívoca, Decreto 1377 de 2013, art. 7). Si la persona
   // la desmarca, no se puede reservar en línea.
   const acceptedPrivacy = ref(true)
+
+  // Cliente recordado en este dispositivo (ver readSavedCustomer).
+  const savedCustomer = ref<SavedCustomer | null>(readSavedCustomer())
 
   const lastCreatedCitaId = ref<string | null>(null)
 
@@ -414,9 +463,36 @@ export const useBookingStore = defineStore('booking', () => {
     selectedProductIds.value = new Set()
     selectedBarberoSchedule.value = defaultSchedule()
     bookedTimes.value = []
+    customer.name = savedCustomer.value?.name ?? ''
+    customer.phone = savedCustomer.value?.phone ?? ''
+    acceptedPrivacy.value = true
+  }
+
+  // "¿No eres tú?": olvida el cliente de este dispositivo y vuelve a pedir datos.
+  function forgetCustomer() {
+    savedCustomer.value = null
+    clearSavedCustomer()
     customer.name = ''
     customer.phone = ''
-    acceptedPrivacy.value = true
+  }
+
+  // Crea el cliente solo si ese celular no existe. Las reglas permiten crear
+  // pero no sobrescribir, así que si el número ya está registrado el intento
+  // se rechaza y se ignora: el cliente original queda intacto.
+  async function registerCustomer(name: string, phone: string) {
+    const phoneId = normalizePhone(phone)
+    if (!phoneId) return
+    try {
+      await setDoc(doc(db, 'clientes', phoneId), {
+        name,
+        phone,
+        createdAt: serverTimestamp(),
+        privacyConsent: true,
+        privacyPolicyVersion: PRIVACY_POLICY_VERSION,
+      })
+    } catch {
+      // Ya existía (o no hay conexión): la cita igual quedó guardada.
+    }
   }
 
   function goToStep(index: number) {
@@ -559,6 +635,14 @@ export const useBookingStore = defineStore('booking', () => {
     }
     writeStoredBooking(record)
     storedBooking.value = record
+
+    const customerData = { name: customer.name.trim(), phone: customer.phone.trim() }
+    if (normalizePhone(customerData.phone) !== normalizePhone(savedCustomer.value?.phone ?? '')) {
+      void registerCustomer(customerData.name, customerData.phone)
+    }
+    savedCustomer.value = customerData
+    writeSavedCustomer(customerData)
+
     isSubmitting.value = false
   }
 
@@ -645,6 +729,7 @@ export const useBookingStore = defineStore('booking', () => {
     selectedProductIds,
     customer,
     acceptedPrivacy,
+    savedCustomer,
     isNameValid,
     isPhoneValid,
     lastCreatedCitaId,
@@ -663,6 +748,7 @@ export const useBookingStore = defineStore('booking', () => {
     open,
     close,
     startNewBooking,
+    forgetCustomer,
     refreshStoredBooking,
     fetchScheduleForBarbero,
     goToStep,
