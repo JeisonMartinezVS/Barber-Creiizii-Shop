@@ -292,18 +292,6 @@ function refresh() {
       <h1 class="font-serif text-xl font-bold text-white">Agenda de Citas</h1>
       <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <div class="flex items-center gap-2">
-         <!-- <button
-            type="button"
-            class="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg border border-white/10 text-white/60 hover:text-white hover:border-white/20 transition"
-            aria-label="Actualizar"
-            @click="refresh"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="23 4 23 10 17 10" />
-              <polyline points="1 20 1 14 7 14" />
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-            </svg>
-          </button> -->
           <input
             v-model="selectedDate"
             type="date"
