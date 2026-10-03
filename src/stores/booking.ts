@@ -109,10 +109,76 @@ export function getSlotId(barberoId: string, date: string, time: string): string
   return `${barberoId}_${date}_${time}`
 }
 
+/**
+ * "13:00" → "1:00 PM". Las horas se guardan siempre en formato 24 h ("HH:MM");
+ * esto es solo para mostrarlas.
+ */
+export function formatTime12(time: string | null | undefined): string {
+  if (!time) return ''
+  const [h, m] = time.split(':').map(Number)
+  if (h === undefined || m === undefined || Number.isNaN(h) || Number.isNaN(m)) return time
+  const period = h >= 12 ? 'PM' : 'AM'
+  const hour12 = h % 12 === 0 ? 12 : h % 12
+  return `${hour12}:${String(m).padStart(2, '0')} ${period}`
+}
+
+// Anticipación mínima para reservar: por ejemplo, a las 10:05 ya no se
+// ofrece "10:00", solo desde el siguiente horario en adelante.
+export const MIN_LEAD_MINUTES = 30
+
+/**
+ * Horarios libres ("HH:MM", cada 30 min) de un barbero en un día, según su
+ * horario de trabajo y los horarios ya ocupados.
+ */
+export function buildTimeSlots(schedule: DaySchedule[], date: Date | null, bookedTimes: string[]): string[] {
+  if (!date) return []
+  const daySchedule = schedule[date.getDay()]
+  if (!daySchedule || !daySchedule.enabled) return []
+
+  const [startH = 10, startM = 0] = daySchedule.start.split(':').map(Number)
+  const [endH = 20, endM = 30] = daySchedule.end.split(':').map(Number)
+  const startMinutes = startH * 60 + startM
+  const endMinutes = endH * 60 + endM
+
+  const allSlots: string[] = []
+  for (let minutes = startMinutes; minutes <= endMinutes; minutes += 30) {
+    const h = Math.floor(minutes / 60)
+    const m = minutes % 60
+    allSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+  }
+
+  let result = allSlots.filter((slot) => !bookedTimes.includes(slot))
+
+  if (date.toDateString() === new Date().toDateString()) {
+    const cutoff = new Date(Date.now() + MIN_LEAD_MINUTES * 60000)
+    result = result.filter((slot) => combineDateAndTime(date, slot) > cutoff)
+  }
+
+  return result
+}
+
+/** Horario semanal del barbero (o el de por defecto si no tiene uno). */
+export async function loadBarberoSchedule(barberoId: string): Promise<DaySchedule[]> {
+  const snap = await getDoc(doc(db, 'empleados', barberoId))
+  const data = snap.exists() ? (snap.data() as { schedule?: DaySchedule[] }) : undefined
+  return Array.isArray(data?.schedule) && data.schedule.length === 7 ? data.schedule : defaultSchedule()
+}
+
+/** Horas ya ocupadas ("HH:MM") de un barbero en una fecha "YYYY-MM-DD". */
+export async function loadBookedTimes(barberoId: string, dateStr: string): Promise<string[]> {
+  const snapshot = await getDocs(
+    query(collection(db, 'disponibilidad'), where('barberoId', '==', barberoId), where('date', '==', dateStr)),
+  )
+  return snapshot.docs
+    .map((d) => d.data())
+    .filter((slot) => slot.status !== 'cancelada')
+    .map((slot) => slot.time as string)
+}
+
 const STORAGE_KEY = 'creiizii_last_booking'
 const INACTIVE_STATUSES = ['cancelada', 'completada', 'no_asistio']
 
-function combineDateAndTime(date: Date, time: string): Date {
+export function combineDateAndTime(date: Date, time: string): Date {
   const [hours = 0, minutes = 0] = time.split(':').map(Number)
   const combined = new Date(date)
   combined.setHours(hours, minutes, 0, 0)
@@ -377,10 +443,7 @@ export const useBookingStore = defineStore('booking', () => {
 
   async function fetchScheduleForBarbero(barberoId: string) {
     try {
-      const snap = await getDoc(doc(db, 'empleados', barberoId))
-      const data = snap.exists() ? (snap.data() as { schedule?: DaySchedule[] }) : undefined
-      selectedBarberoSchedule.value =
-        Array.isArray(data?.schedule) && data.schedule.length === 7 ? data.schedule : defaultSchedule()
+      selectedBarberoSchedule.value = await loadBarberoSchedule(barberoId)
     } catch (err) {
       console.error('No se pudo cargar el horario del barbero', err)
       selectedBarberoSchedule.value = defaultSchedule()
@@ -394,17 +457,7 @@ export const useBookingStore = defineStore('booking', () => {
     }
     isLoadingBookedTimes.value = true
     try {
-      const dateStr = formatLocalDate(selectedDate.value)
-      const q = query(
-        collection(db, 'disponibilidad'),
-        where('barberoId', '==', selectedBarberoId.value),
-        where('date', '==', dateStr),
-      )
-      const snapshot = await getDocs(q)
-      bookedTimes.value = snapshot.docs
-        .map((d) => d.data())
-        .filter((slot) => slot.status !== 'cancelada')
-        .map((slot) => slot.time as string)
+      bookedTimes.value = await loadBookedTimes(selectedBarberoId.value, formatLocalDate(selectedDate.value))
     } catch (err) {
       console.error('No se pudieron cargar los horarios ocupados', err)
       bookedTimes.value = []

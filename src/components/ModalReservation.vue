@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref } from 'vue'
 import {
+  buildTimeSlots,
   formatCOP,
   formatLocalDate,
+  formatTime12,
   LOW_STOCK_THRESHOLD,
   MAX_PRODUCTS_PER_BOOKING,
   useBookingStore,
@@ -89,42 +91,9 @@ function handleCustomDateChange() {
   store.selectDate(picked)
 }
 
-// Anticipación mínima para reservar: por ejemplo, a las 10:05 ya no se
-// ofrece "10:00", solo desde el siguiente horario en adelante.
-const MIN_LEAD_MINUTES = 30
-
-const timeSlots = computed(() => {
-  if (!store.selectedDate) return []
-
-  const daySchedule = store.selectedBarberoSchedule[store.selectedDate.getDay()]
-  if (!daySchedule || !daySchedule.enabled) return []
-
-  const [startH = 10, startM = 0] = daySchedule.start.split(':').map(Number)
-  const [endH = 20, endM = 30] = daySchedule.end.split(':').map(Number)
-  const startMinutes = startH * 60 + startM
-  const endMinutes = endH * 60 + endM
-
-  const allSlots: string[] = []
-  for (let minutes = startMinutes; minutes <= endMinutes; minutes += 30) {
-    const h = Math.floor(minutes / 60)
-    const m = minutes % 60
-    allSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
-  }
-
-  let result = allSlots.filter((slot) => !store.bookedTimes.includes(slot))
-
-  if (isSameDay(store.selectedDate, new Date())) {
-    const cutoff = new Date(Date.now() + MIN_LEAD_MINUTES * 60000)
-    result = result.filter((slot) => {
-      const [h = 0, m = 0] = slot.split(':').map(Number)
-      const slotDate = new Date(store.selectedDate as Date)
-      slotDate.setHours(h, m, 0, 0)
-      return slotDate > cutoff
-    })
-  }
-
-  return result
-})
+const timeSlots = computed(() =>
+  buildTimeSlots(store.selectedBarberoSchedule, store.selectedDate, store.bookedTimes),
+)
 
 const fechaLarga = computed(() => {
   if (!store.selectedDate) return ''
@@ -297,7 +266,7 @@ async function handleCancelStored() {
               </div>
               <h3 class="font-serif text-lg font-bold text-white text-center mb-1">Ya tienes una cita agendada</h3>
               <p class="text-sm text-white/50 text-center mb-5">
-                {{ storedFechaLarga }} a las {{ store.storedBooking.time }} con {{ store.storedBooking.barberoName }}.
+                {{ storedFechaLarga }} a las {{ formatTime12(store.storedBooking.time) }} con {{ store.storedBooking.barberoName }}.
               </p>
 
               <div class="border border-white/10 rounded-xl p-4 mb-5 space-y-1.5">
@@ -350,7 +319,7 @@ async function handleCancelStored() {
               </div>
               <h3 class="font-serif text-lg font-bold text-white mb-1">¡Cita reservada!</h3>
               <p class="text-sm text-white/50 mb-6">
-                Te esperamos {{ fechaLarga }} a las {{ store.selectedTime }} con {{ store.selectedBarbero?.name }}.
+                Te esperamos {{ fechaLarga }} a las {{ formatTime12(store.selectedTime) }} con {{ store.selectedBarbero?.name }}.
               </p>
 
               <template v-if="!cancelledJustNow">
@@ -584,7 +553,7 @@ async function handleCancelStored() {
                   "
                   @click="store.selectTime(slot)"
                 >
-                  {{ slot }}
+                  {{ formatTime12(slot) }}
                 </button>
               </div>
             </template>
@@ -608,7 +577,7 @@ async function handleCancelStored() {
                   </div>
                   <div>
                     <p class="text-xs text-white/40 mb-0.5">Hora</p>
-                    <p class="text-sm font-semibold text-white">{{ store.selectedTime }}</p>
+                    <p class="text-sm font-semibold text-white">{{ formatTime12(store.selectedTime) }}</p>
                   </div>
                 </div>
               </div>

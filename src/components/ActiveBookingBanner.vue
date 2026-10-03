@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import { useBookingStore } from '../stores/booking'
+import { formatTime12, useBookingStore } from '../stores/booking'
 
 const store = useBookingStore()
 
@@ -13,7 +13,7 @@ const label = computed(() => {
   if (!booking) return ''
   const d = new Date(booking.dateTimeISO)
   const weekday = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][d.getDay()]
-  return `${weekday} ${d.getDate()}, ${booking.time}`
+  return `${weekday} ${d.getDate()}, ${formatTime12(booking.time)}`
 })
 </script>
 
