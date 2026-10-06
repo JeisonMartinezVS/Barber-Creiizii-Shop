@@ -128,9 +128,15 @@ export const MIN_LEAD_MINUTES = 30
 
 /**
  * Horarios libres ("HH:MM", cada 30 min) de un barbero en un día, según su
- * horario de trabajo y los horarios ya ocupados.
+ * horario de trabajo y los horarios ya ocupados. Con `allowPast` (agenda desde
+ * el panel) también se ofrecen las horas de hoy que ya pasaron y nadie tomó.
  */
-export function buildTimeSlots(schedule: DaySchedule[], date: Date | null, bookedTimes: string[]): string[] {
+export function buildTimeSlots(
+  schedule: DaySchedule[],
+  date: Date | null,
+  bookedTimes: string[],
+  options: { allowPast?: boolean } = {},
+): string[] {
   if (!date) return []
   const daySchedule = schedule[date.getDay()]
   if (!daySchedule || !daySchedule.enabled) return []
@@ -149,7 +155,7 @@ export function buildTimeSlots(schedule: DaySchedule[], date: Date | null, booke
 
   let result = allSlots.filter((slot) => !bookedTimes.includes(slot))
 
-  if (date.toDateString() === new Date().toDateString()) {
+  if (!options.allowPast && date.toDateString() === new Date().toDateString()) {
     const cutoff = new Date(Date.now() + MIN_LEAD_MINUTES * 60000)
     result = result.filter((slot) => combineDateAndTime(date, slot) > cutoff)
   }

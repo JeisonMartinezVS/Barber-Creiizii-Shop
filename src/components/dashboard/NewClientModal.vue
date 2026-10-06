@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { collection, doc, getDoc, serverTimestamp, setDoc, Timestamp, writeBatch } from 'firebase/firestore'
+import { arrayUnion, collection, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc, writeBatch } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import { PRIVACY_POLICY_VERSION } from '../../content/legalVersion'
 import { useAuthStore } from '../../stores/auth'
@@ -53,7 +53,14 @@ if (authStore.user && bookingStore.bookableBarberos.some((b) => b.id === authSto
 }
 
 const MAX_DAYS_AHEAD = 90
-const minDate = formatLocalDate(new Date())
+// Desde el panel se pueden registrar citas que ya pasaron (reservas hechas
+// directamente con el barbero), hasta este número de días atrás.
+const MAX_DAYS_BACK = 30
+const minDate = (() => {
+  const d = new Date()
+  d.setDate(d.getDate() - MAX_DAYS_BACK)
+  return formatLocalDate(d)
+})()
 const maxDate = (() => {
   const d = new Date()
   d.setDate(d.getDate() + MAX_DAYS_AHEAD)
@@ -110,7 +117,11 @@ const dayDisabled = computed(() => {
   const day = schedule.value[selectedDate.value.getDay()]
   return !!day && !day.enabled
 })
-const timeSlots = computed(() => buildTimeSlots(schedule.value, selectedDate.value, bookedTimes.value))
+// A diferencia del modal público, aquí se ofrecen también las horas que ya
+// pasaron, siempre que nadie las haya tomado.
+const timeSlots = computed(() =>
+  buildTimeSlots(schedule.value, selectedDate.value, bookedTimes.value, { allowPast: true }),
+)
 
 // --- Guardar ----------------------------------------------------------------
 const isSaving = ref(false)
@@ -131,24 +142,43 @@ function validate(): string {
     if (!selectedBarbero.value) return 'Elige el barbero.'
     if (!selectedService.value) return 'Elige el servicio.'
     if (!form.date || form.date < minDate || form.date > maxDate)
-      return `Elige una fecha desde hoy y hasta ${MAX_DAYS_AHEAD} días adelante.`
+      return `Elige una fecha entre ${MAX_DAYS_BACK} días atrás y ${MAX_DAYS_AHEAD} días adelante.`
     if (dayDisabled.value) return `${selectedBarbero.value.name} no trabaja ese día.`
     if (!form.time) return 'Elige la hora de la cita.'
   }
   return ''
 }
 
+// Quiénes "tienen" al cliente: quien lo registra y el barbero de la cita.
+function ownerIds(): string[] {
+  const ids = new Set<string>()
+  if (authStore.user) ids.add(authStore.user.uid)
+  if (form.withBooking && form.barberoId) ids.add(form.barberoId)
+  return [...ids]
+}
+
 // Crea el cliente solo si ese celular no existe; devuelve true si ya existía.
+// Si ya existía, se suma quien lo registra a sus barberos para que lo vea.
 async function ensureCustomer(name: string, phone: string): Promise<boolean> {
   const ref = doc(db, 'clientes', normalizePhone(phone))
   const snap = await getDoc(ref)
-  if (snap.exists()) return true
+  const owners = ownerIds()
+  if (snap.exists()) {
+    if (owners.length) {
+      await updateDoc(ref, { barberoIds: arrayUnion(...owners) }).catch((err) =>
+        console.warn('No se pudo asociar el cliente al barbero', err),
+      )
+    }
+    return true
+  }
   await setDoc(ref, {
     name,
     phone,
     createdAt: serverTimestamp(),
     privacyConsent: true,
     privacyPolicyVersion: PRIVACY_POLICY_VERSION,
+    barberoIds: owners,
+    createdBy: authStore.user?.uid ?? '',
   })
   return false
 }
@@ -161,6 +191,7 @@ async function save() {
   const phone = form.phone.trim()
   isSaving.value = true
   try {
+    // El cliente que ya está en la lista queda asociado al barbero por la cita.
     const alreadyExisted = isExisting.value ? true : await ensureCustomer(name, phone)
 
     if (!form.withBooking) {
@@ -223,7 +254,8 @@ async function save() {
     }
 
     const fecha = dateTime.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })
-    emit('saved', `Cita agendada para ${name}: ${fecha} a las ${formatTime12(time)} con ${barbero.name}.`)
+    const verb = dateTime.getTime() < Date.now() ? 'Cita registrada' : 'Cita agendada'
+    emit('saved', `${verb} para ${name}: ${fecha} a las ${formatTime12(time)} con ${barbero.name}.`)
   } catch (err) {
     console.error('No se pudo registrar el cliente', err)
     error.value = 'No se pudo registrar el cliente. Intenta de nuevo.'
