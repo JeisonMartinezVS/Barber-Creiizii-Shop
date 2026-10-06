@@ -16,6 +16,7 @@ import { db } from '../config/firebase'
 import { LOW_STOCK_THRESHOLD } from '../stores/booking'
 import { PRODUCT_CATALOG } from '../config/productCatalog'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
+import ProductSalesReport from '../components/dashboard/ProductSalesReport.vue'
 import ToggleSwitch from '../ui/ToggleSwitch.vue'
 
 interface Producto {
@@ -252,6 +253,9 @@ async function confirmDelete() {
         </div>
       </form>
     </div>
+
+    <!-- Informe de ventas (citas completadas + ventas directas) -->
+    <ProductSalesReport :productos="productos" />
 
     <!-- Lista de productos -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

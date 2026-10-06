@@ -1,6 +1,17 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { arrayUnion, collection, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc, writeBatch } from 'firebase/firestore'
+import {
+  arrayUnion,
+  collection,
+  doc,
+  getDoc,
+  increment,
+  serverTimestamp,
+  setDoc,
+  Timestamp,
+  updateDoc,
+  writeBatch,
+} from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import { PRIVACY_POLICY_VERSION } from '../../content/legalVersion'
 import { useAuthStore } from '../../stores/auth'
@@ -12,7 +23,9 @@ import {
   formatLocalDate,
   formatTime12,
   getSlotId,
+  LOW_STOCK_THRESHOLD,
   loadBarberoSchedule,
+  MAX_PRODUCTS_PER_BOOKING,
   loadBookedTimes,
   normalizePhone,
   useBookingStore,
@@ -46,6 +59,34 @@ const form = reactive({
   date: '',
   time: '',
 })
+
+// --- Productos de la cita (máximo MAX_PRODUCTS_PER_BOOKING, como en la web) --
+const selectedProductIds = ref<Set<string>>(new Set())
+const selectedProducts = computed(() => bookingStore.products.filter((p) => selectedProductIds.value.has(p.id)))
+// Solo se ofrecen los productos con stock (los ya elegidos se mantienen a la
+// vista para poder quitarlos, aunque se agoten mientras el modal está abierto).
+const offeredProducts = computed(() =>
+  bookingStore.products.filter((p) => p.stock > 0 || selectedProductIds.value.has(p.id)),
+)
+const total = computed(
+  () => (selectedService.value?.price ?? 0) + selectedProducts.value.reduce((sum, p) => sum + p.price, 0),
+)
+
+function canAddProduct(product: { id: string; stock: number }) {
+  if (selectedProductIds.value.has(product.id)) return true
+  return product.stock > 0 && selectedProductIds.value.size < MAX_PRODUCTS_PER_BOOKING
+}
+function toggleProduct(id: string) {
+  const set = new Set(selectedProductIds.value)
+  if (set.has(id)) {
+    set.delete(id)
+  } else {
+    const product = bookingStore.products.find((p) => p.id === id)
+    if (!product || !canAddProduct(product)) return
+    set.add(id)
+  }
+  selectedProductIds.value = set
+}
 
 // Un barbero que agenda desde su panel normalmente agenda para sí mismo.
 if (authStore.user && bookingStore.bookableBarberos.some((b) => b.id === authStore.user!.uid)) {
@@ -208,7 +249,12 @@ async function save() {
     // Igual que en el modal público: cita y horario en un solo lote atómico,
     // así nunca se reserva dos veces el mismo horario.
     const citaRef = doc(collection(db, 'citas'))
+    const chosenProducts = selectedProducts.value
     const batch = writeBatch(db)
+    // Cada producto descuenta 1 unidad de stock en el mismo lote (igual que la web).
+    for (const product of chosenProducts) {
+      batch.update(doc(db, 'productos', product.id), { stock: increment(-1), stockCitaId: citaRef.id })
+    }
     batch.set(doc(db, 'disponibilidad', getSlotId(barbero.id, dateStr, time)), {
       barberoId: barbero.id,
       date: dateStr,
@@ -223,9 +269,9 @@ async function save() {
       serviceName: service.name,
       serviceDuration: service.duration,
       servicePrice: service.price,
-      products: [],
-      productIds: [],
-      total: service.price,
+      products: chosenProducts.map((p) => ({ id: p.id, name: p.name, price: p.price })),
+      productIds: chosenProducts.map((p) => p.id),
+      total: total.value,
       dateTime: Timestamp.fromDate(dateTime),
       date: dateStr,
       time,
@@ -242,9 +288,17 @@ async function save() {
     } catch (err) {
       console.error('No se pudo agendar la cita', err)
       await refreshBookedTimes()
+      const soldOut = chosenProducts.filter(
+        (chosen) => (bookingStore.products.find((p) => p.id === chosen.id)?.stock ?? 0) <= 0,
+      )
       if (bookedTimes.value.includes(time)) {
         form.time = ''
         error.value = 'Ese horario se acaba de ocupar. Elige otro.'
+      } else if (soldOut.length > 0) {
+        const set = new Set(selectedProductIds.value)
+        soldOut.forEach((p) => set.delete(p.id))
+        selectedProductIds.value = set
+        error.value = `Se agotó: ${soldOut.map((p) => p.name).join(', ')}. Lo quitamos de la cita.`
       } else {
         error.value = alreadyExisted
           ? 'No se pudo agendar la cita. Intenta de nuevo.'
@@ -378,6 +432,43 @@ const inputClass =
                   {{ formatTime12(slot) }}
                 </button>
               </div>
+            </div>
+
+            <!-- Productos (opcional) -->
+            <div v-if="offeredProducts.length > 0">
+              <p class="text-xs tracking-wide text-white/40 mb-2">
+                PRODUCTOS <span class="normal-case tracking-normal text-white/30">(opcional, máximo {{ MAX_PRODUCTS_PER_BOOKING }})</span>
+              </p>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  v-for="product in offeredProducts"
+                  :key="product.id"
+                  type="button"
+                  :disabled="!canAddProduct(product)"
+                  class="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  :class="
+                    selectedProductIds.has(product.id)
+                      ? 'border-[#4a8fe7]/60 bg-[#4a8fe7]/10'
+                      : 'border-white/10 hover:border-white/25'
+                  "
+                  @click="toggleProduct(product.id)"
+                >
+                  <span class="min-w-0">
+                    <span class="block text-sm text-white truncate">{{ product.name }}</span>
+                    <span v-if="product.stock <= 0" class="block text-[11px] text-red-400">Agotado</span>
+                    <span v-else-if="product.stock <= LOW_STOCK_THRESHOLD" class="block text-[11px] text-[#f2b705]">
+                      Quedan {{ product.stock }}
+                    </span>
+                    <span v-else class="block text-[11px] text-white/40">Stock: {{ product.stock }}</span>
+                  </span>
+                  <span class="text-sm font-semibold text-[#4a8fe7] shrink-0">{{ formatCOP(product.price) }}</span>
+                </button>
+              </div>
+            </div>
+
+            <div v-if="selectedService" class="flex items-center justify-between text-sm border-t border-white/10 pt-4">
+              <span class="text-white/60">Total de la cita</span>
+              <span class="font-bold text-[#4a8fe7]">{{ formatCOP(total) }}</span>
             </div>
           </div>
 

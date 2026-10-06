@@ -56,7 +56,6 @@ const routes = [
         path: 'clientes',
         name: 'clientes',
         component: () => import('../Admin/ClientsView.vue'),
-        meta: { adminOnly: true },
       },
       {
         path: 'empleados',
