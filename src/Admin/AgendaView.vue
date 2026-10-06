@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { collection, doc, increment, onSnapshot, orderBy, query, setDoc, where, writeBatch } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { useAuthStore } from '../stores/auth'
-import { formatLocalDate, getSlotId, stockDeltaForStatusChange, useBookingStore } from '../stores/booking'
+import { formatLocalDate, formatTime12, getSlotId, stockDeltaForStatusChange, useBookingStore } from '../stores/booking'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
 
 const authStore = useAuthStore()
@@ -349,8 +349,8 @@ function refresh() {
           <div v-for="cita in group.citas" :key="cita.id" class="px-4 sm:px-5 py-4">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div class="flex items-center gap-4">
-                <div class="text-center w-14 shrink-0">
-                  <p class="text-[#4a8fe7] font-bold text-sm">{{ cita.time }}</p>
+                <div class="text-center w-16 shrink-0">
+                  <p class="text-[#4a8fe7] font-bold text-sm whitespace-nowrap">{{ formatTime12(cita.time) }}</p>
                   <p class="text-white/30 text-xs">{{ WEEKDAY_SHORT[cita.dateTime.toDate().getDay()] }}</p>
                 </div>
                 <div class="min-w-0">
@@ -360,7 +360,7 @@ function refresh() {
                 </div>
               </div>
 
-              <div class="flex items-center justify-between sm:justify-end gap-3 flex-wrap sm:ml-auto pl-[4.5rem] sm:pl-0">
+              <div class="flex items-center justify-between sm:justify-end gap-3 flex-wrap sm:ml-auto pl-[5rem] sm:pl-0">
                 <div class="text-right">
   <p class="text-sm font-bold text-[#4a8fe7]">${{ cita.total.toLocaleString('es-CO') }}</p>
   <button
@@ -523,7 +523,7 @@ function refresh() {
             <h2 class="font-serif text-lg font-bold text-white mb-1">¿Eliminar esta cita?</h2>
             <p class="text-sm text-white/50">
               La cita de <span class="text-white font-semibold">{{ citaToDelete.customerName }}</span>
-              ({{ citaToDelete.time }}, {{ citaToDelete.serviceName }}) se eliminará permanentemente.
+              ({{ formatTime12(citaToDelete.time) }}, {{ citaToDelete.serviceName }}) se eliminará permanentemente.
             </p>
           </div>
           <div class="flex items-center gap-3 px-6 pb-6 pt-2">

@@ -3,7 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { collection, doc, increment, onSnapshot, query, setDoc, where, writeBatch } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { useAuthStore } from '../stores/auth'
-import { formatLocalDate, getSlotId, stockDeltaForStatusChange, useBookingStore } from '../stores/booking'
+import { formatLocalDate, formatTime12, getSlotId, stockDeltaForStatusChange, useBookingStore } from '../stores/booking'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
 
 const authStore = useAuthStore()
@@ -497,7 +497,7 @@ async function confirmDelete() {
             <tbody>
               <tr v-for="cita in pagedCitas" :key="cita.id" class="border-b border-white/5 last:border-0">
                 <td class="py-2.5 pr-4 text-white/70">{{ formatTableDate(cita.date) }}</td>
-                <td class="py-2.5 pr-4 text-white/70">{{ cita.time || '—' }}</td>
+                <td class="py-2.5 pr-4 text-white/70 whitespace-nowrap">{{ formatTime12(cita.time) || '—' }}</td>
                 <td v-if="scope === 'todos'" class="py-2.5 pr-4 text-white/70">{{ barberoName(cita.barberoId) }}</td>
                 <td class="py-2.5 pr-4 text-white/70">{{ cita.customerName || '—' }}</td>
                 <td class="py-2.5 pr-4 text-white/50">{{ cita.serviceName || '—' }}</td>
@@ -602,7 +602,7 @@ async function confirmDelete() {
             <p class="text-xs tracking-wide text-[#4a8fe7] mb-1">CAMBIAR ESTADO</p>
             <h2 class="font-serif text-lg font-bold text-white mb-1">{{ citaToStatus.customerName || 'Cita' }}</h2>
             <p class="text-sm text-white/50 mb-5">
-              {{ formatTableDate(citaToStatus.date) }} · {{ citaToStatus.time || '—' }} · {{ citaToStatus.serviceName || '—' }}
+              {{ formatTableDate(citaToStatus.date) }} · {{ formatTime12(citaToStatus.time) || '—' }} · {{ citaToStatus.serviceName || '—' }}
             </p>
             <div class="space-y-2">
               <button
@@ -648,7 +648,7 @@ async function confirmDelete() {
             <h2 class="font-serif text-lg font-bold text-white mb-1">¿Eliminar esta cita?</h2>
             <p class="text-sm text-white/50">
               La cita de <span class="text-white font-semibold">{{ citaToDelete.customerName || 'este cliente' }}</span>
-              ({{ formatTableDate(citaToDelete.date) }} {{ citaToDelete.time }}, {{ citaToDelete.serviceName }}) se eliminará
+              ({{ formatTableDate(citaToDelete.date) }} {{ formatTime12(citaToDelete.time) }}, {{ citaToDelete.serviceName }}) se eliminará
               permanentemente.
             </p>
           </div>
