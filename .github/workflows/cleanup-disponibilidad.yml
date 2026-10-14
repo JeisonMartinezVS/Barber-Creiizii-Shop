@@ -1,0 +1,23 @@
+name: Limpiar disponibilidad
+
+on:
+  schedule:
+    # 05:05 UTC = 00:05 en Colombia (UTC-5, sin horario de verano).
+    - cron: '5 5 * * *'
+  # Permite correrlo a mano desde la pestaña Actions.
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node scripts/cleanupDisponibilidad.mjs
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
