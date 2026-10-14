@@ -11,6 +11,8 @@ const authStore = useAuthStore()
 const ChangePasswordModal = defineAsyncComponent(() => import('../components/dashboard/ChangePasswordModal.vue'))
 // Aviso de productos por agotarse (visible para admin y empleados).
 const LowStockAlert = defineAsyncComponent(() => import('../components/dashboard/LowStockAlert.vue'))
+// Citas propias que quedaron "pendiente" en días que ya pasaron.
+const PendingPastAlert = defineAsyncComponent(() => import('../components/dashboard/PendingPastAlert.vue'))
 
 interface NavItem {
   name: string
@@ -190,5 +192,6 @@ async function handleLogout() {
 
     <!-- Primer ingreso de un empleado: obliga a cambiar la contraseña temporal -->
     <ChangePasswordModal v-if="authStore.mustChangePassword" />
+    <PendingPastAlert v-else />
   </div>
 </template>
