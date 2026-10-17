@@ -5,6 +5,7 @@ import { db } from '../config/firebase'
 import { useAuthStore } from '../stores/auth'
 import { formatLocalDate, formatTime12, getSlotId, stockDeltaForStatusChange, useBookingStore } from '../stores/booking'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
+import RescheduleModal from '../components/dashboard/RescheduleModal.vue'
 
 const authStore = useAuthStore()
 const bookingStore = useBookingStore() // reutiliza su lista en vivo de `barberos` para el filtro
@@ -202,6 +203,23 @@ async function setStatus(cita: Cita, status: CitaStatus) {
   if (status === 'cancelada') await releaseSlot(cita)
 }
 
+// --- Cambiar hora (p. ej. el cliente llegó antes) -----------------------------
+// Solo citas activas: las canceladas o "no asistió" ya no ocupan horario.
+const RESCHEDULABLE: CitaStatus[] = ['pendiente', 'confirmada', 'completada']
+const citaToReschedule = ref<Cita | null>(null)
+const actionMessage = ref('')
+
+function openReschedule(cita: Cita) {
+  closeMenu()
+  actionError.value = ''
+  actionMessage.value = ''
+  citaToReschedule.value = cita
+}
+function onRescheduled(message: string) {
+  citaToReschedule.value = null
+  actionMessage.value = message
+}
+
 const citaToDelete = ref<Cita | null>(null)
 const isDeleting = ref(false)
 
@@ -285,6 +303,13 @@ function refresh() {
       class="mb-4 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-2.5"
     >
       {{ actionError }}
+    </p>
+    <p
+      v-if="actionMessage"
+      class="mb-4 flex items-center justify-between gap-3 text-sm text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 rounded-lg px-4 py-2.5"
+    >
+      {{ actionMessage }}
+      <button type="button" class="text-xs text-white/50 hover:text-white" aria-label="Cerrar" @click="actionMessage = ''">✕</button>
     </p>
 
     <!-- Barra de herramientas -->
@@ -373,48 +398,113 @@ function refresh() {
   </button>
 </div>
 
-                <span
-                  class="flex items-center gap-1.5 text-xs font-semibold rounded-lg border px-3 py-1.5 shrink-0"
-                  :style="{ color: STATUS_CONFIG[cita.status].color, borderColor: STATUS_CONFIG[cita.status].color + '66' }"
-                  v-html="STATUS_CONFIG[cita.status].icon + ' ' + STATUS_CONFIG[cita.status].label"
-                ></span>
-
+                <!-- El estado es también el botón que abre las acciones de la cita -->
                 <div class="relative" data-acciones-menu>
                   <button
                     type="button"
-                    class="text-xs font-semibold text-white/70 border border-white/10 rounded-lg px-3 py-1.5 hover:border-white/25 hover:text-white transition"
+                    class="flex items-center gap-1.5 text-xs font-semibold rounded-lg border px-3 py-1.5 shrink-0 transition hover:bg-white/5"
+                    :style="{ color: STATUS_CONFIG[cita.status].color, borderColor: STATUS_CONFIG[cita.status].color + '66' }"
+                    :aria-expanded="openMenuId === cita.id"
+                    aria-haspopup="menu"
                     @click="toggleMenu(cita.id)"
                   >
-                    Acciones
+                    <span v-html="STATUS_CONFIG[cita.status].icon"></span>
+                    {{ STATUS_CONFIG[cita.status].label }}
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      class="transition-transform"
+                      :class="openMenuId === cita.id ? 'rotate-180' : ''"
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
                   </button>
-                  <div
-                    v-if="openMenuId === cita.id"
-                    class="absolute right-0 mt-2 w-48 bg-[#151515] border border-white/10 rounded-lg shadow-xl z-10 overflow-hidden"
-                  >
-                    <button
-                      v-for="status in STATUS_ACTIONS"
-                      :key="status"
-                      type="button"
-                      class="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold hover:bg-white/5 transition"
-                      :style="{ color: STATUS_CONFIG[status].color }"
-                      @click="setStatus(cita, status)"
+
+                  <template v-if="openMenuId === cita.id">
+                    <!-- En móvil el menú sale como hoja inferior con fondo oscuro -->
+                    <div class="sm:hidden fixed inset-0 bg-black/60 z-30" @click="closeMenu"></div>
+                    <div
+                      role="menu"
+                      class="fixed inset-x-0 bottom-0 z-40 rounded-t-2xl pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-0 sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:mt-2 sm:w-64 sm:rounded-xl bg-[#151515] border border-white/10 shadow-2xl overflow-hidden"
                     >
-                      <span v-html="STATUS_CONFIG[status].icon"></span>
-                      {{ STATUS_CONFIG[status].label }}
-                    </button>
-                    <div class="border-t border-white/10"></div>
-                    <button
-                      type="button"
-                      class="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-red-400 hover:bg-red-500/10 transition"
-                      @click="askDelete(cita)"
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      </svg>
-                      Eliminar
-                    </button>
-                  </div>
+                      <div class="px-4 pt-4 pb-2 sm:pt-3">
+                        <div class="sm:hidden mx-auto mb-3 h-1 w-10 rounded-full bg-white/20"></div>
+                        <p class="text-sm font-semibold text-white truncate">{{ cita.customerName }}</p>
+                        <p class="text-xs text-white/40">{{ formatTime12(cita.time) }} · {{ cita.serviceName }}</p>
+                      </div>
+
+                      <p class="px-4 pt-2 pb-1 text-[10px] font-semibold tracking-wider text-white/30 uppercase">Estado</p>
+                      <div class="px-2">
+                        <button
+                          v-for="status in STATUS_ACTIONS"
+                          :key="status"
+                          type="button"
+                          role="menuitem"
+                          :disabled="status === cita.status"
+                          class="w-full flex items-center gap-3 px-3 py-3 sm:py-2.5 rounded-lg text-sm font-medium transition hover:bg-white/5 disabled:cursor-default"
+                          :class="status === cita.status ? 'bg-white/5' : ''"
+                          @click="setStatus(cita, status)"
+                        >
+                          <span
+                            class="w-7 h-7 shrink-0 rounded-full flex items-center justify-center"
+                            :style="{ color: STATUS_CONFIG[status].color, backgroundColor: STATUS_CONFIG[status].color + '1f' }"
+                            v-html="STATUS_CONFIG[status].icon"
+                          ></span>
+                          <span class="flex-1 text-left" :style="{ color: STATUS_CONFIG[status].color }">
+                            {{ STATUS_CONFIG[status].label }}
+                          </span>
+                          <svg
+                            v-if="status === cita.status"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2.5"
+                            class="text-white/60"
+                          >
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      <div class="my-2 border-t border-white/10"></div>
+                      <div class="px-2 pb-2">
+                        <button
+                          v-if="RESCHEDULABLE.includes(cita.status)"
+                          type="button"
+                          role="menuitem"
+                          class="w-full flex items-center gap-3 px-3 py-3 sm:py-2.5 rounded-lg text-sm font-medium text-white/80 hover:bg-white/5 transition"
+                          @click="openReschedule(cita)"
+                        >
+                          <span class="w-7 h-7 shrink-0 rounded-full flex items-center justify-center bg-[#4a8fe7]/15 text-[#4a8fe7]">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                            </svg>
+                          </span>
+                          Cambiar hora
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          class="w-full flex items-center gap-3 px-3 py-3 sm:py-2.5 rounded-lg text-sm font-medium text-red-400 hover:bg-red-500/10 transition"
+                          @click="askDelete(cita)"
+                        >
+                          <span class="w-7 h-7 shrink-0 rounded-full flex items-center justify-center bg-red-500/15">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                            </svg>
+                          </span>
+                          Eliminar cita
+                        </button>
+                      </div>
+                    </div>
+                  </template>
                 </div>
               </div>
             </div>
@@ -509,6 +599,14 @@ function refresh() {
     </div>
   </div>
 </Teleport>
+    <!-- Modal: cambiar la hora de la cita -->
+    <RescheduleModal
+      v-if="citaToReschedule"
+      :cita="citaToReschedule"
+      @close="citaToReschedule = null"
+      @saved="onRescheduled"
+    />
+
     <!-- Modal: confirmar eliminación -->
     <Teleport to="body">
       <div v-if="citaToDelete" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
