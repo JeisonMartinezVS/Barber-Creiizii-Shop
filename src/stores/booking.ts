@@ -10,13 +10,13 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
   Timestamp,
   where,
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { PRIVACY_POLICY_VERSION } from '../content/legalVersion'
+import { addAudit, customerActor } from '../lib/audit'
 
 export interface Barbero {
   id: string
@@ -542,13 +542,23 @@ export const useBookingStore = defineStore('booking', () => {
     const phoneId = normalizePhone(phone)
     if (!phoneId) return
     try {
-      await setDoc(doc(db, 'clientes', phoneId), {
+      const batch = writeBatch(db)
+      batch.set(doc(db, 'clientes', phoneId), {
         name,
         phone,
         createdAt: serverTimestamp(),
         privacyConsent: true,
         privacyPolicyVersion: PRIVACY_POLICY_VERSION,
       })
+      addAudit(batch, customerActor(name), {
+        action: 'cliente.registrado',
+        category: 'cliente',
+        summary: `${name} se registró como cliente desde la web`,
+        customerName: name,
+        customerPhone: phone,
+        targetId: phoneId,
+      })
+      await batch.commit()
     } catch {
       // Ya existía (o no hay conexión): la cita igual quedó guardada.
     }
@@ -653,6 +663,23 @@ export const useBookingStore = defineStore('booking', () => {
       privacyConsent: true,
       privacyPolicyVersion: PRIVACY_POLICY_VERSION,
     })
+    addAudit(batch, customerActor(customer.name.trim()), {
+      action: 'cita.creada',
+      category: 'cita',
+      summary: `${customer.name.trim()} reservó ${service.name} con ${barbero.name} para el ${dateStr} a las ${formatTime12(time)}`,
+      citaId: citaRef.id,
+      customerName: customer.name.trim(),
+      customerPhone: customer.phone.trim(),
+      barberoId: barbero.id,
+      data: {
+        barberoName: barbero.name,
+        serviceName: service.name,
+        date: dateStr,
+        time,
+        total: total.value,
+        products: chosenProducts.map((p) => p.name),
+      },
+    })
 
     try {
       await batch.commit()
@@ -713,10 +740,14 @@ export const useBookingStore = defineStore('booking', () => {
       if (!citaSnap.exists()) return false
       const cita = citaSnap.data() as {
         barberoId: string
+        barberoName?: string
         date: string
         time: string
         status: string
         productIds?: string[]
+        customerName?: string
+        customerPhone?: string
+        serviceName?: string
       }
       // Solo las citas nuevas (con productIds) descontaron stock al reservarse.
       const restock = stockDeltaForStatusChange(cita.status, 'cancelada') === 1 ? (cita.productIds ?? []) : []
@@ -734,7 +765,29 @@ export const useBookingStore = defineStore('booking', () => {
       let lastError: unknown = null
       for (const attempt of attempts) {
         const batch = writeBatch(db)
-        batch.update(citaRef, { status: 'cancelada' })
+        batch.update(citaRef, {
+          status: 'cancelada',
+          cancelledAt: serverTimestamp(),
+          cancelledBy: 'cliente',
+          cancelledByUid: '',
+        })
+        addAudit(batch, customerActor(cita.customerName ?? 'Cliente'), {
+          action: 'cita.cancelada',
+          category: 'cita',
+          summary: `${cita.customerName ?? 'El cliente'} canceló su cita del ${cita.date} a las ${formatTime12(cita.time)} desde la web`,
+          citaId,
+          customerName: cita.customerName ?? '',
+          customerPhone: cita.customerPhone ?? '',
+          barberoId: cita.barberoId,
+          changes: { status: { from: cita.status, to: 'cancelada' } },
+          data: {
+            barberoName: cita.barberoName ?? '',
+            serviceName: cita.serviceName ?? '',
+            date: cita.date,
+            time: cita.time,
+            slotReleased: attempt.slot,
+          },
+        })
         if (attempt.slot) batch.update(slotRef, { status: 'cancelada' })
         if (attempt.stock) {
           for (const productId of restock) {

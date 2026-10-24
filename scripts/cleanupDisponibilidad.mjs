@@ -16,7 +16,7 @@
 
 import { readFileSync } from 'node:fs'
 import { initializeApp, cert } from 'firebase-admin/app'
-import { getFirestore } from 'firebase-admin/firestore'
+import { FieldValue, getFirestore } from 'firebase-admin/firestore'
 
 const TIME_ZONE = 'America/Bogota'
 
@@ -48,3 +48,25 @@ for (;;) {
 }
 
 console.log(`disponibilidad: ${deleted} horarios anteriores a ${today} eliminados`)
+
+// Constancia en la auditoría (el Admin SDK no pasa por las reglas de Firestore).
+if (deleted > 0) {
+  await db.collection('auditoria').add({
+    at: FieldValue.serverTimestamp(),
+    action: 'sistema.limpieza',
+    category: 'sistema',
+    summary: `Limpieza diaria: se borraron ${deleted} horarios de días anteriores a ${today}`,
+    source: 'sistema',
+    userAgent: 'GitHub Actions',
+    actorType: 'sistema',
+    actorUid: '',
+    actorName: 'Limpieza automática',
+    actorRole: 'sistema',
+    citaId: '',
+    customerName: '',
+    customerPhone: '',
+    barberoId: '',
+    targetId: '',
+    data: { deleted, before: today },
+  })
+}

@@ -73,6 +73,18 @@ const routes = [
       { path: 'horarios', name: 'horarios', component: () => import('../Admin/TimeView.vue') },
     ],
   },
+  // Solo el super admin (custom claim). No aparece en ningún menú del panel.
+  {
+    path: '/auditoria',
+    name: 'Auditoria',
+    component: () => import('../SuperAdmin/AuditView.vue'),
+    meta: {
+      layout: 'admin',
+      requiresAuth: true,
+      superAdminOnly: true,
+      seo: { title: 'Auditoría | North Side Barber Club', index: false },
+    },
+  },
 ]
 
 const router = createRouter({
@@ -157,6 +169,16 @@ router.beforeEach(async (to) => {
     return to.name === 'Login' ? true : { name: 'Login' }
   }
 
+  // El super admin solo audita: no entra al panel de citas, y nadie más entra
+  // a la auditoría. La protección real de los datos son las reglas de Firestore.
+  const superAdminOnly = to.matched.some((record) => record.meta.superAdminOnly)
+  if (superAdminOnly && !authStore.isSuperAdmin) {
+    return { name: authStore.user ? 'Agenda' : 'Login' }
+  }
+  if (authStore.isSuperAdmin && to.matched.some((record) => record.name === 'Dashboard')) {
+    return { name: 'Auditoria' }
+  }
+
   // Esto es solo la capa visual: la protección real de los datos son las
   // reglas de seguridad de Firestore.
   const adminOnly = to.matched.some((record) => record.meta.adminOnly)
@@ -165,7 +187,7 @@ router.beforeEach(async (to) => {
   }
 
   if (to.name === 'Login' && authStore.user) {
-    return { name: 'Agenda' }
+    return { name: authStore.isSuperAdmin ? 'Auditoria' : 'Agenda' }
   }
 })
 

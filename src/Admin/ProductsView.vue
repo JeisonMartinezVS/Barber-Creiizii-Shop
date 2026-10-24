@@ -2,22 +2,24 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import {
   collection,
-  deleteDoc,
   doc,
   getDocs,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
-  updateDoc,
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '../config/firebase'
+import { addAudit } from '../lib/audit'
+import { useAuthStore } from '../stores/auth'
 import { LOW_STOCK_THRESHOLD } from '../stores/booking'
 import { PRODUCT_CATALOG } from '../config/productCatalog'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
 import ProductSalesReport from '../components/dashboard/ProductSalesReport.vue'
 import ToggleSwitch from '../ui/ToggleSwitch.vue'
+
+const authStore = useAuthStore()
 
 interface Producto {
   id: string
@@ -77,6 +79,12 @@ async function syncCatalog() {
         created++
       }
     }
+    addAudit(batch, authStore.auditActor, {
+      action: 'producto.catalogo',
+      category: 'producto',
+      summary: `${authStore.auditActor.actorName} sincronizó el catálogo de productos (${created} nuevo${created === 1 ? '' : 's'})`,
+      data: { created, total: PRODUCT_CATALOG.length },
+    })
     await batch.commit()
     syncMessage.value = created
       ? `Se crearon ${created} producto${created === 1 ? '' : 's'}. Ahora asígnales stock.`
@@ -128,7 +136,22 @@ async function saveProduct() {
 
   isSaving.value = true
   try {
-    await updateDoc(doc(db, 'productos', editingProduct.value.id), { name, stock })
+    const product = editingProduct.value
+    const batch = writeBatch(db)
+    batch.update(doc(db, 'productos', product.id), { name, stock })
+    const changes: Record<string, { from: unknown; to: unknown }> = {}
+    if (product.name !== name) changes.name = { from: product.name, to: name }
+    if ((product.stock ?? 0) !== stock) changes.stock = { from: product.stock ?? 0, to: stock }
+    addAudit(batch, authStore.auditActor, {
+      action: 'producto.editado',
+      category: 'producto',
+      summary: `${authStore.auditActor.actorName} editó el producto ${product.name}${
+        changes.stock ? ` (stock ${product.stock ?? 0} → ${stock})` : ''
+      }`,
+      targetId: product.id,
+      changes,
+    })
+    await batch.commit()
     editingProduct.value = null
   } catch (err) {
     console.error('No se pudo guardar el producto', err)
@@ -139,7 +162,16 @@ async function saveProduct() {
 }
 
 async function toggleActive(producto: Producto) {
-  await updateDoc(doc(db, 'productos', producto.id), { active: !producto.active })
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'productos', producto.id), { active: !producto.active })
+  addAudit(batch, authStore.auditActor, {
+    action: producto.active ? 'producto.desactivado' : 'producto.activado',
+    category: 'producto',
+    summary: `${authStore.auditActor.actorName} ${producto.active ? 'desactivó' : 'activó'} el producto ${producto.name}`,
+    targetId: producto.id,
+    changes: { active: { from: producto.active, to: !producto.active } },
+  })
+  await batch.commit()
 }
 
 // --- Eliminar (solo productos antiguos, fuera del catálogo) ---------------
@@ -157,7 +189,17 @@ async function confirmDelete() {
   if (!productToDelete.value) return
   isDeleting.value = true
   try {
-    await deleteDoc(doc(db, 'productos', productToDelete.value.id))
+    const product = productToDelete.value
+    const batch = writeBatch(db)
+    batch.delete(doc(db, 'productos', product.id))
+    addAudit(batch, authStore.auditActor, {
+      action: 'producto.eliminado',
+      category: 'producto',
+      summary: `${authStore.auditActor.actorName} eliminó el producto ${product.name}`,
+      targetId: product.id,
+      data: { name: product.name, brand: product.brand, price: product.price, stock: product.stock },
+    })
+    await batch.commit()
     productToDelete.value = null
   } finally {
     isDeleting.value = false

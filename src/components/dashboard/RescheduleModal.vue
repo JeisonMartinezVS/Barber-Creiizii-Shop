@@ -2,6 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { doc, getDoc, Timestamp, writeBatch } from 'firebase/firestore'
 import { db } from '../../config/firebase'
+import { addAudit, citaRefs } from '../../lib/audit'
+import { useAuthStore } from '../../stores/auth'
 import {
   buildTimeSlots,
   combineDateAndTime,
@@ -20,7 +22,9 @@ const props = defineProps<{
   cita: {
     id: string
     barberoId: string
+    barberoName?: string
     customerName: string
+    customerPhone?: string
     serviceName: string
     date: string // "YYYY-MM-DD"
     time: string
@@ -32,6 +36,7 @@ const emit = defineEmits<{
   saved: [message: string]
 }>()
 
+const authStore = useAuthStore()
 const slots = ref<string[]>([])
 const isLoading = ref(true)
 const isSaving = ref(false)
@@ -87,6 +92,14 @@ async function save() {
     batch.update(doc(db, 'citas', cita.id), {
       time,
       dateTime: Timestamp.fromDate(combineDateAndTime(day.value, time)),
+    })
+    addAudit(batch, authStore.auditActor, {
+      action: 'cita.hora',
+      category: 'cita',
+      summary: `${authStore.auditActor.actorName} cambió la hora de la cita de ${cita.customerName} (${cita.date}) de ${formatTime12(cita.time)} a ${formatTime12(time)}`,
+      ...citaRefs(cita),
+      changes: { time: { from: cita.time, to: time } },
+      data: { date: cita.date, serviceName: cita.serviceName, barberoName: cita.barberoName ?? '', oldSlotReleased: oldSlot.exists() },
     })
     await batch.commit()
     emit('saved', `La cita de ${cita.customerName} ahora es a las ${formatTime12(time)}. Las ${formatTime12(cita.time)} quedaron libres.`)

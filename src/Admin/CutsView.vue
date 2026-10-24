@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { collection, doc, onSnapshot, updateDoc } from 'firebase/firestore'
+import { collection, doc, onSnapshot, writeBatch, type DocumentReference } from 'firebase/firestore'
 import { db } from '../config/firebase'
+import { addAudit } from '../lib/audit'
 import { useAuthStore } from '../stores/auth'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
 import ToggleSwitch from '../ui/ToggleSwitch.vue'
@@ -37,6 +38,20 @@ interface Producto {
 }
 
 const authStore = useAuthStore()
+
+// Guarda la lista de servicios junto con su registro de auditoría.
+async function saveServices(
+  configRef: DocumentReference,
+  updatedServices: Service[],
+  action: string,
+  summary: string,
+  data: Record<string, unknown>,
+) {
+  const batch = writeBatch(db)
+  batch.update(configRef, { services: updatedServices })
+  addAudit(batch, authStore.auditActor, { action, category: 'servicio', summary, targetId: configRef.id, data })
+  await batch.commit()
+}
 
 // Estas categorías siempre deben poder elegirse, incluso antes de que exista
 // ningún corte todavía.
@@ -261,7 +276,28 @@ async function saveProduct() {
       })
     }
 
-    await updateDoc(configRef, { services: updatedServices })
+    const editing = productos.value.find((item) => item.id === editingId.value)
+    const actorName = authStore.auditActor.actorName
+    await saveServices(
+      configRef,
+      updatedServices,
+      editing ? 'servicio.editado' : 'servicio.creado',
+      editing
+        ? `${actorName} editó el corte "${editing.name}" (${editing.title})`
+        : `${actorName} creó el corte "${form.name.trim()}" en ${form.title.trim()}`,
+      {
+        before: editing
+          ? { name: editing.name, title: editing.title, price: editing.price, duration: editing.duration, description: editing.description }
+          : null,
+        after: {
+          name: form.name.trim(),
+          title: form.title.trim(),
+          price: form.price.trim(),
+          duration: form.duration.trim(),
+          description: form.description.trim(),
+        },
+      },
+    )
     isFormOpen.value = false
   } catch (err) {
     console.error('No se pudo guardar el corte:', err)
@@ -282,7 +318,13 @@ async function toggleActive(producto: Producto) {
     const service = updatedServices[producto.serviceIndex]
     if (!service?.items?.[producto.itemIndex]) return
     service.items[producto.itemIndex] = { ...service.items[producto.itemIndex], active: !producto.active }
-    await updateDoc(configRef, { services: updatedServices })
+    await saveServices(
+      configRef,
+      updatedServices,
+      producto.active ? 'servicio.desactivado' : 'servicio.activado',
+      `${authStore.auditActor.actorName} ${producto.active ? 'desactivó' : 'activó'} el corte "${producto.name}" (${producto.title})`,
+      { name: producto.name, title: producto.title },
+    )
   } catch (err) {
     console.error('No se pudo actualizar el estado:', err)
   }
@@ -312,7 +354,13 @@ async function confirmDelete() {
     const service = updatedServices[producto.serviceIndex]
     if (!service?.items) return
     service.items.splice(producto.itemIndex, 1)
-    await updateDoc(configRef, { services: updatedServices })
+    await saveServices(
+      configRef,
+      updatedServices,
+      'servicio.eliminado',
+      `${authStore.auditActor.actorName} eliminó el corte "${producto.name}" (${producto.title})`,
+      { name: producto.name, title: producto.title, price: producto.price, duration: producto.duration },
+    )
     productToDelete.value = null
   } catch (err) {
     console.error('No se pudo eliminar el corte:', err)

@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import {
   signInWithEmailAndPassword,
   signOut,
+  getIdTokenResult,
   onAuthStateChanged,
   updatePassword,
   type User,
@@ -11,6 +12,7 @@ import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { auth } from '../config/firebaseAuth'
 import { fetchAuthAccountTimestamps } from '../lib/authAccountInfo'
+import { logAudit, type AuditActor } from '../lib/audit'
 
 // El login muestra un campo "usuario", pero Firebase Auth necesita un correo.
 // Si la persona no escribe "@", se arma uno con este dominio fijo, así las
@@ -35,6 +37,15 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAdmin = computed(() => role.value === 'admin')
   const isEmpleado = computed(() => role.value === 'empleado')
+  const isSuperAdmin = computed(() => role.value === 'superadmin')
+
+  /** Quién firma los registros de auditoría que se hacen desde el panel. */
+  const auditActor = computed<AuditActor>(() => ({
+    actorType: 'personal',
+    actorUid: user.value?.uid ?? '',
+    actorName: name.value || user.value?.email || '',
+    actorRole: (role.value ?? 'empleado') as AuditActor['actorRole'],
+  }))
 
   // El rol vive en Firestore (empleados/{uid}.role), no en un custom claim:
   // los custom claims solo se pueden asignar con el Admin SDK (una Cloud
@@ -42,6 +53,15 @@ export const useAuthStore = defineStore('auth', () => {
   // de Firestore funciona desde el navegador, sin backend.
   async function loadRole(uid: string) {
     try {
+      // El super admin no tiene ficha en `empleados` (así el admin no lo ve):
+      // se reconoce por el custom claim que pone scripts/setSuperAdmin.mjs.
+      const current = auth.currentUser
+      if (current && (await getIdTokenResult(current)).claims.superadmin === true) {
+        role.value = 'superadmin'
+        name.value = current.displayName || current.email || 'Super admin'
+        mustChangePassword.value = false
+        return
+      }
       const snap = await getDoc(doc(db, 'empleados', uid))
       const data = snap.exists() ? snap.data() : null
       // Sin acceso al panel si no tiene ficha (empleado eliminado), si está
@@ -112,6 +132,12 @@ export const useAuthStore = defineStore('auth', () => {
         error.value = 'Tu cuenta no tiene acceso al panel. Contacta al administrador.'
         return false
       }
+      void logAudit(auditActor.value, {
+        action: 'sesion.inicio',
+        category: 'sesion',
+        summary: `${auditActor.value.actorName} inició sesión`,
+        targetId: credential.user.uid,
+      })
       return true
     } catch {
       // Mensaje genérico a propósito: nunca revelar si falló el usuario o la contraseña.
@@ -123,6 +149,14 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout(): Promise<void> {
+    if (user.value && role.value) {
+      await logAudit(auditActor.value, {
+        action: 'sesion.cierre',
+        category: 'sesion',
+        summary: `${auditActor.value.actorName} cerró sesión`,
+        targetId: user.value.uid,
+      })
+    }
     await signOut(auth)
     user.value = null
     role.value = null
@@ -142,6 +176,12 @@ export const useAuthStore = defineStore('auth', () => {
     // No hace falta escribir en Firestore: Firebase Auth ya registró el cambio
     // (passwordUpdatedAt), y en el próximo ingreso hasChangedPassword() lo ve.
     mustChangePassword.value = false
+    void logAudit(auditActor.value, {
+      action: 'sesion.contrasena',
+      category: 'sesion',
+      summary: `${auditActor.value.actorName} cambió su contraseña`,
+      targetId: current.uid,
+    })
     return { ok: true }
   }
 
@@ -151,6 +191,8 @@ export const useAuthStore = defineStore('auth', () => {
     name,
     isAdmin,
     isEmpleado,
+    isSuperAdmin,
+    auditActor,
     isReady,
     isLoading,
     error,

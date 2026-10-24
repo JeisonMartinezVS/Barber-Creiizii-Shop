@@ -5,6 +5,7 @@ import { db } from '../config/firebase'
 import { useAuthStore } from '../stores/auth'
 import { formatLocalDate, formatTime12, getSlotId, stockDeltaForStatusChange, useBookingStore } from '../stores/booking'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
+import { deleteCita, updateCitaStatus } from '../lib/citaAudit'
 
 const authStore = useAuthStore()
 const bookingStore = useBookingStore() // lista viva de barberos, para el selector del admin
@@ -19,6 +20,7 @@ interface Cita {
   time: string
   status: CitaStatus
   customerName: string
+  customerPhone: string
   serviceName: string
   productIds: string[] // solo en citas que descontaron stock al reservarse
 }
@@ -58,6 +60,7 @@ function subscribe() {
           date?: string
           time?: string
           customerName?: string
+          customerPhone?: string
           serviceName?: string
           productIds?: string[]
         }
@@ -71,6 +74,7 @@ function subscribe() {
           date,
           time,
           customerName: data.customerName ?? '',
+          customerPhone: data.customerPhone ?? '',
           serviceName: data.serviceName ?? '',
           productIds: data.productIds ?? [],
         }
@@ -291,7 +295,7 @@ async function setStatus(status: CitaStatus) {
   isChangingStatus.value = true
   actionError.value = ''
   const batch = writeBatch(db)
-  batch.update(doc(db, 'citas', cita.id), { status })
+  updateCitaStatus(batch, authStore.auditActor, { ...cita, barberoName: barberoName(cita.barberoId) }, status)
   const delta = stockDeltaForStatusChange(cita.status, status)
   if (delta !== 0) {
     for (const productId of cita.productIds) {
@@ -332,7 +336,7 @@ async function confirmDelete() {
   actionError.value = ''
   try {
     const batch = writeBatch(db)
-    batch.delete(doc(db, 'citas', cita.id))
+    deleteCita(batch, authStore.auditActor, { ...cita, barberoName: barberoName(cita.barberoId) })
     if (cita.status === 'pendiente' || cita.status === 'confirmada') {
       for (const productId of cita.productIds) {
         batch.update(doc(db, 'productos', productId), { stock: increment(1), stockCitaId: cita.id })

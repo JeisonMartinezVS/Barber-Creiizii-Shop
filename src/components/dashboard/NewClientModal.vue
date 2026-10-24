@@ -7,13 +7,12 @@ import {
   getDoc,
   increment,
   serverTimestamp,
-  setDoc,
   Timestamp,
-  updateDoc,
   writeBatch,
 } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import { PRIVACY_POLICY_VERSION } from '../../content/legalVersion'
+import { addAudit } from '../../lib/audit'
 import { useAuthStore } from '../../stores/auth'
 import {
   buildTimeSlots,
@@ -204,15 +203,26 @@ async function ensureCustomer(name: string, phone: string): Promise<boolean> {
   const ref = doc(db, 'clientes', normalizePhone(phone))
   const snap = await getDoc(ref)
   const owners = ownerIds()
+  const actor = authStore.auditActor
   if (snap.exists()) {
     if (owners.length) {
-      await updateDoc(ref, { barberoIds: arrayUnion(...owners) }).catch((err) =>
-        console.warn('No se pudo asociar el cliente al barbero', err),
-      )
+      const batch = writeBatch(db)
+      batch.update(ref, { barberoIds: arrayUnion(...owners) })
+      addAudit(batch, actor, {
+        action: 'cliente.asociado',
+        category: 'cliente',
+        summary: `${actor.actorName} asoció al cliente ${name} (${phone}) a su lista`,
+        customerName: name,
+        customerPhone: phone,
+        targetId: ref.id,
+        data: { barberoIds: owners },
+      })
+      await batch.commit().catch((err) => console.warn('No se pudo asociar el cliente al barbero', err))
     }
     return true
   }
-  await setDoc(ref, {
+  const batch = writeBatch(db)
+  batch.set(ref, {
     name,
     phone,
     createdAt: serverTimestamp(),
@@ -221,6 +231,15 @@ async function ensureCustomer(name: string, phone: string): Promise<boolean> {
     barberoIds: owners,
     createdBy: authStore.user?.uid ?? '',
   })
+  addAudit(batch, actor, {
+    action: 'cliente.registrado',
+    category: 'cliente',
+    summary: `${actor.actorName} registró al cliente ${name} (${phone}) desde el panel`,
+    customerName: name,
+    customerPhone: phone,
+    targetId: ref.id,
+  })
+  await batch.commit()
   return false
 }
 
@@ -281,6 +300,23 @@ async function save() {
       createdAt: serverTimestamp(),
       privacyConsent: true,
       privacyPolicyVersion: PRIVACY_POLICY_VERSION,
+    })
+    addAudit(batch, authStore.auditActor, {
+      action: 'cita.creada',
+      category: 'cita',
+      summary: `${authStore.auditActor.actorName} agendó a ${name} con ${barbero.name} para el ${dateStr} a las ${formatTime12(time)} (${service.name})`,
+      citaId: citaRef.id,
+      customerName: name,
+      customerPhone: phone,
+      barberoId: barbero.id,
+      data: {
+        barberoName: barbero.name,
+        serviceName: service.name,
+        date: dateStr,
+        time,
+        total: total.value,
+        products: chosenProducts.map((p) => p.name),
+      },
     })
 
     try {

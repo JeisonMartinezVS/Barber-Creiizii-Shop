@@ -11,6 +11,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore'
 import { db } from '../../config/firebase'
+import { addAudit } from '../../lib/audit'
 import { useAuthStore } from '../../stores/auth'
 import { formatCOP, formatLocalDate } from '../../stores/booking'
 
@@ -209,7 +210,8 @@ async function saveSale() {
   try {
     // La venta y el descuento de stock van en el mismo lote.
     const batch = writeBatch(db)
-    batch.set(doc(collection(db, 'ventas')), {
+    const ventaRef = doc(collection(db, 'ventas'))
+    batch.set(ventaRef, {
       productId: product.id,
       productName: product.name,
       quantity,
@@ -220,6 +222,13 @@ async function saveSale() {
       createdBy: authStore.user?.uid ?? '',
     })
     batch.update(doc(db, 'productos', product.id), { stock: increment(-quantity) })
+    addAudit(batch, authStore.auditActor, {
+      action: 'venta.registrada',
+      category: 'venta',
+      summary: `${authStore.auditActor.actorName} registró la venta de ${quantity} × ${product.name} por ${formatCOP(quantity * unitPrice)}`,
+      targetId: ventaRef.id,
+      data: { productId: product.id, productName: product.name, quantity, unitPrice, total: quantity * unitPrice, date: saleForm.date },
+    })
     await batch.commit()
     isSaleFormOpen.value = false
   } catch (err) {
@@ -241,6 +250,13 @@ async function confirmDeleteVenta() {
   try {
     const batch = writeBatch(db)
     batch.delete(doc(db, 'ventas', venta.id))
+    addAudit(batch, authStore.auditActor, {
+      action: 'venta.anulada',
+      category: 'venta',
+      summary: `${authStore.auditActor.actorName} anuló la venta de ${venta.quantity} × ${venta.productName}`,
+      targetId: venta.id,
+      data: { productId: venta.productId, productName: venta.productName, quantity: venta.quantity, date: venta.date },
+    })
     if (props.productos.some((p) => p.id === venta.productId)) {
       batch.update(doc(db, 'productos', venta.productId), { stock: increment(venta.quantity) })
     }

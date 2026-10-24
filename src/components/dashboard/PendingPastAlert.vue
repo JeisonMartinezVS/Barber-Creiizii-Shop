@@ -4,6 +4,7 @@ import { collection, doc, increment, onSnapshot, query, where, writeBatch } from
 import { db } from '../../config/firebase'
 import { useAuthStore } from '../../stores/auth'
 import { formatLocalDate, formatTime12, stockDeltaForStatusChange } from '../../stores/booking'
+import { updateCitaStatus } from '../../lib/citaAudit'
 
 // Aviso al abrir el panel: citas del barbero logueado que siguen "pendiente"
 // aunque su día ya pasó. Cada barbero ve SOLO las suyas (también el admin).
@@ -14,6 +15,8 @@ type CitaStatus = 'pendiente' | 'confirmada' | 'completada' | 'cancelada' | 'no_
 
 interface PendingCita {
   id: string
+  barberoId: string
+  barberoName?: string
   customerName: string
   customerPhone: string
   serviceName: string
@@ -72,7 +75,7 @@ async function setStatus(cita: PendingCita, status: CitaStatus) {
   // Igual que en la Agenda: el estado y el ajuste de stock van en un lote. El
   // horario no se libera: el día ya pasó y la limpieza diaria lo borra.
   const batch = writeBatch(db)
-  batch.update(doc(db, 'citas', cita.id), { status })
+  updateCitaStatus(batch, authStore.auditActor, cita, status)
   const delta = stockDeltaForStatusChange(cita.status, status)
   if (delta !== 0) {
     for (const productId of cita.productIds ?? []) {

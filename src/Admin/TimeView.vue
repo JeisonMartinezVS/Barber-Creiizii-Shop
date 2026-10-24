@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore'
+import { doc, onSnapshot, writeBatch } from 'firebase/firestore'
 import { db } from '../config/firebase'
+import { addAudit } from '../lib/audit'
 import { useAuthStore } from '../stores/auth'
 import { defaultSchedule, useBookingStore, WEEKDAY_LABELS, type DaySchedule } from '../stores/booking'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
@@ -39,6 +40,8 @@ const todayIndex = new Date().getDay()
 const today = computed<DaySchedule>(() => schedule.value[todayIndex] ?? schedule.value[0]!)
 
 let unsubscribe: (() => void) | null = null
+// Horario tal como está guardado, para registrar qué días cambiaron.
+let savedSchedule: DaySchedule[] = []
 
 function subscribeToBarbero(barberoId: string) {
   unsubscribe?.()
@@ -52,6 +55,7 @@ function subscribeToBarbero(barberoId: string) {
         Array.isArray(data?.schedule) && data.schedule.length === 7
           ? data.schedule.map((d, i) => ({ ...d, label: WEEKDAY_LABELS[i]! }))
           : defaultSchedule()
+      savedSchedule = schedule.value.map((d) => ({ ...d }))
     },
     (err) => {
       loading.value = false
@@ -74,9 +78,29 @@ async function saveSchedule() {
   savedJustNow.value = false
   isSaving.value = true
   try {
-    await updateDoc(doc(db, 'empleados', targetBarberoId.value), {
+    const describeDay = (d: DaySchedule | undefined) => (d?.enabled ? `${d.start}–${d.end}` : 'no trabaja')
+    const changes: Record<string, { from: string; to: string }> = {}
+    schedule.value.forEach((day, i) => {
+      const from = describeDay(savedSchedule[i])
+      const to = describeDay(day)
+      if (from !== to) changes[WEEKDAY_LABELS[i]!] = { from, to }
+    })
+    const changedDays = Object.keys(changes)
+    const batch = writeBatch(db)
+    batch.update(doc(db, 'empleados', targetBarberoId.value), {
       schedule: schedule.value,
     })
+    addAudit(batch, authStore.auditActor, {
+      action: 'horario.actualizado',
+      category: 'horario',
+      summary: `${authStore.auditActor.actorName} actualizó el horario de ${targetBarberoName.value || 'un barbero'} (${
+        changedDays.length ? changedDays.join(', ') : 'sin cambios'
+      })`,
+      targetId: targetBarberoId.value,
+      barberoId: targetBarberoId.value,
+      changes,
+    })
+    await batch.commit()
     savedJustNow.value = true
     setTimeout(() => (savedJustNow.value = false), 2500)
   } catch (err) {

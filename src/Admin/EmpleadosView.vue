@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, reactive, ref } from 'vue'
-import { collection, deleteDoc, doc, onSnapshot, orderBy, query, setDoc, updateDoc } from 'firebase/firestore'
+import { collection, doc, onSnapshot, orderBy, query, writeBatch } from 'firebase/firestore'
 import { db } from '../config/firebase'
+import { addAudit } from '../lib/audit'
 import { resolveEmail, useAuthStore } from '../stores/auth'
 import { createStaffAuthAccount, generateRandomPassword } from '../lib/createStaffAccount'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
@@ -45,7 +46,17 @@ function editEmpleado(empleado: Empleado) {
 
 async function toggleActive(empleado: Empleado) {
   try {
-    await updateDoc(doc(db, 'empleados', empleado.id), { active: !empleado.active })
+    const batch = writeBatch(db)
+    batch.update(doc(db, 'empleados', empleado.id), { active: !empleado.active })
+    addAudit(batch, authStore.auditActor, {
+      action: empleado.active ? 'empleado.desactivado' : 'empleado.activado',
+      category: 'empleado',
+      summary: `${authStore.auditActor.actorName} ${empleado.active ? 'desactivó' : 'activó'} al empleado ${empleado.name}`,
+      targetId: empleado.id,
+      barberoId: empleado.id,
+      changes: { active: { from: empleado.active, to: !empleado.active } },
+    })
+    await batch.commit()
   } catch (err) {
     console.error('No se pudo actualizar el estado del empleado', err)
   }
@@ -65,7 +76,18 @@ async function confirmDelete() {
   if (!empleadoToDelete.value) return
   isDeleting.value = true
   try {
-    await deleteDoc(doc(db, 'empleados', empleadoToDelete.value.id))
+    const empleado = empleadoToDelete.value
+    const batch = writeBatch(db)
+    batch.delete(doc(db, 'empleados', empleado.id))
+    addAudit(batch, authStore.auditActor, {
+      action: 'empleado.eliminado',
+      category: 'empleado',
+      summary: `${authStore.auditActor.actorName} eliminó al empleado ${empleado.name} (${empleado.username})`,
+      targetId: empleado.id,
+      barberoId: empleado.id,
+      data: { name: empleado.name, username: empleado.username, phone: empleado.phone, role: empleado.role },
+    })
+    await batch.commit()
     empleadoToDelete.value = null
   } catch (err) {
     console.error('No se pudo eliminar el empleado', err)
@@ -150,16 +172,31 @@ async function submitNewEmployee() {
     //    escribe aquí ya sea admin — nunca desde este flujo directamente,
     //    la regla revisa el documento de QUIEN está logueado ahora (tú).
     if (editingId.value){
-      await updateDoc(doc(db, 'empleados', editingId.value), {
+      const before = empleados.value.find((e) => e.id === editingId.value)
+      const batch = writeBatch(db)
+      batch.update(doc(db, 'empleados', editingId.value), {
         name: form.name.trim(),
         phone: form.phone.trim(),
       })
+      addAudit(batch, authStore.auditActor, {
+        action: 'empleado.editado',
+        category: 'empleado',
+        summary: `${authStore.auditActor.actorName} editó los datos del empleado ${before?.name ?? form.name.trim()}`,
+        targetId: editingId.value,
+        barberoId: editingId.value,
+        changes: {
+          name: { from: before?.name ?? '', to: form.name.trim() },
+          phone: { from: before?.phone ?? '', to: form.phone.trim() },
+        },
+      })
+      await batch.commit()
 
     } else {
 // 1. Crea la cuenta de Auth SIN afectar tu propia sesión de admin.
     const { uid, tempPasswordSetAt } = await createStaffAuthAccount(email, password)
 
-      await setDoc(doc(db, 'empleados', uid), {
+      const batch = writeBatch(db)
+      batch.set(doc(db, 'empleados', uid), {
       name: form.name.trim(),
       email,
       phone: form.phone.trim(),
@@ -170,6 +207,15 @@ async function submitNewEmployee() {
       tempPasswordSetAt, // passwordUpdatedAt de la contraseña temporal, para detectar cuándo la cambia
       createdAt: new Date().toISOString(),
     })
+      addAudit(batch, authStore.auditActor, {
+        action: 'empleado.creado',
+        category: 'empleado',
+        summary: `${authStore.auditActor.actorName} creó al empleado ${form.name.trim()} (${email.split('@')[0]})`,
+        targetId: uid,
+        barberoId: uid,
+        data: { name: form.name.trim(), username: email.split('@')[0], phone: form.phone.trim(), role: 'empleado' },
+      })
+      await batch.commit()
 
     createdEmployee.value = {
       name: form.name.trim(),

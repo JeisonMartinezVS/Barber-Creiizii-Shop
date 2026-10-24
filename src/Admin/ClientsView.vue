@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref } from 'vue'
-import { collection, deleteDoc, doc, onSnapshot, orderBy, query, where, type Timestamp } from 'firebase/firestore'
+import { collection, doc, onSnapshot, orderBy, query, where, writeBatch, type Timestamp } from 'firebase/firestore'
 import { db } from '../config/firebase'
+import { addAudit } from '../lib/audit'
 import { useAuthStore } from '../stores/auth'
 import { normalizePhone, useBookingStore } from '../stores/booking'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
@@ -172,7 +173,17 @@ async function confirmDelete() {
   if (!cliente) return
   isDeleting.value = true
   try {
-    await deleteDoc(doc(db, 'clientes', cliente.id))
+    const batch = writeBatch(db)
+    batch.delete(doc(db, 'clientes', cliente.id))
+    addAudit(batch, authStore.auditActor, {
+      action: 'cliente.eliminado',
+      category: 'cliente',
+      summary: `${authStore.auditActor.actorName} eliminó al cliente ${cliente.name} (${cliente.phone})`,
+      customerName: cliente.name,
+      customerPhone: cliente.phone,
+      targetId: cliente.id,
+    })
+    await batch.commit()
     successMessage.value = `Cliente ${cliente.name} eliminado.`
   } catch (err) {
     console.error('No se pudo eliminar el cliente', err)

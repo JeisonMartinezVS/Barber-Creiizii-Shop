@@ -1,0 +1,331 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function staffPath() {
+      return /databases/$(database)/documents/empleados/$(request.auth.uid);
+    }
+
+    function isStaff() {
+      return request.auth != null
+        && exists(staffPath())
+        && get(staffPath()).data.get('active', true) != false
+        && get(staffPath()).data.get('role', '') in ['admin', 'empleado'];
+    }
+
+    function isAdmin() {
+      return isStaff() && get(staffPath()).data.role == 'admin';
+    }
+
+    // El super admin se marca con un custom claim de Firebase Auth
+    // (scripts/setSuperAdmin.mjs), no en `empleados`: así no aparece en la
+    // lista del admin y nadie desde el panel puede dárselo ni quitárselo.
+    function isSuperAdmin() {
+      return request.auth != null && request.auth.token.get('superadmin', false) == true;
+    }
+
+    function onlyChanges(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    function isShortString(value, min, max) {
+      return value is string && value.size() >= min && value.size() <= max;
+    }
+
+    // ---- Clientes ----------------------------------------------------------
+    // barberoIds / createdBy solo los escribe el personal desde el panel
+    // (Clientes → Nuevo cliente). La reserva pública no los envía.
+    function hasValidOwnership(d) {
+      return (!('barberoIds' in d) || (d.barberoIds is list && d.barberoIds.size() <= 20))
+        && (!('createdBy' in d) || (isStaff() && d.createdBy == request.auth.uid));
+    }
+
+    match /clientes/{phoneId} {
+      // Cualquiera puede registrarse, pero no sobrescribir un número existente.
+      allow create: if phoneId.matches('^[0-9]{7,20}$')
+        && request.resource.data.keys().hasOnly(['name', 'phone', 'createdAt', 'privacyConsent',
+                                                 'privacyPolicyVersion', 'barberoIds', 'createdBy'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 80
+        && request.resource.data.phone is string && request.resource.data.phone.size() <= 20
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.privacyConsent == true
+        && hasValidOwnership(request.resource.data);
+      // Admin y empleados ven la lista (el panel filtra los de cada barbero).
+      allow read: if isStaff();
+      // El personal solo puede asociarse a un cliente que ya existe.
+      allow update: if isStaff()
+        && onlyChanges(['barberoIds'])
+        && request.resource.data.barberoIds is list
+        && request.resource.data.barberoIds.size() <= 20;
+      // El admin elimina cualquiera; un empleado, los que él registró.
+      allow delete: if isAdmin()
+        || (isStaff() && resource.data.get('createdBy', '') == request.auth.uid);
+    }
+
+    // ---- Stock: una cita retiene stock mientras está pendiente, confirmada o completada.
+    function holdsStock(status) {
+      return status in ['pendiente', 'confirmada', 'completada'];
+    }
+
+    function productPath(productId) {
+      return /databases/$(database)/documents/productos/$(productId);
+    }
+
+    function citaPath(citaId) {
+      return /databases/$(database)/documents/citas/$(citaId);
+    }
+
+    // Solo mueve el stock 1 unidad, ligado a una cita que cambia de estado en el mismo lote.
+    function isStockAdjustmentForCita(productId) {
+      let citaId = request.resource.data.stockCitaId;
+      let cita = citaPath(citaId);
+      let existedBefore = exists(cita);
+      let existsNow = existsAfter(cita);
+      let heldBefore = existedBefore && holdsStock(get(cita).data.status);
+      let holdsNow = existsNow && holdsStock(getAfter(cita).data.status);
+      let delta = request.resource.data.stock - resource.data.stock;
+      return onlyChanges(['stock', 'stockCitaId'])
+        && isShortString(citaId, 1, 128)
+        && (existedBefore || existsNow)
+        && productId in (existsNow ? getAfter(cita) : get(cita)).data.get('productIds', [])
+        && ((delta == -1 && !heldBefore && holdsNow && resource.data.stock >= 1)
+            || (delta == 1 && heldBefore && !holdsNow
+                && (existsNow || get(cita).data.status in ['pendiente', 'confirmada'])));
+    }
+
+    // En una reserva nueva, cada producto (máximo 3) descuenta 1 unidad en el mismo lote.
+    function productReservedFor(d, i, citaId) {
+      return d.productIds.size() <= i
+        || (getAfter(productPath(d.productIds[i])).data.get('stockCitaId', '') == citaId
+            && getAfter(productPath(d.productIds[i])).data.stock
+               == get(productPath(d.productIds[i])).data.stock - 1);
+    }
+
+    function hasValidProductIds(d, citaId) {
+      return d.productIds is list
+        && d.productIds.size() <= 3
+        && d.productIds.size() == d.products.size()
+        && d.productIds.toSet().size() == d.productIds.size()
+        && productReservedFor(d, 0, citaId)
+        && productReservedFor(d, 1, citaId)
+        && productReservedFor(d, 2, citaId);
+    }
+
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /productos/{productoId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || isStockAdjustmentForCita(productoId);
+    }
+
+    match /empleados/{empleadoId} {
+      allow read: if true;
+      allow write: if isAdmin()
+                   || (isStaff()
+                       && request.auth.uid == empleadoId
+                       && onlyChanges(['schedule'])
+                       && request.resource.data.schedule is list
+                       && request.resource.data.schedule.size() == 7);
+    }
+
+    // Ventas directas de productos (sin cita), registradas desde Productos.
+    match /ventas/{ventaId} {
+      allow read, delete: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['productId', 'productName', 'quantity', 'unitPrice',
+                                                 'total', 'date', 'createdAt', 'createdBy'])
+        && isShortString(request.resource.data.productId, 1, 128)
+        && isShortString(request.resource.data.productName, 1, 120)
+        && request.resource.data.quantity is int
+        && request.resource.data.quantity >= 1 && request.resource.data.quantity <= 1000
+        && request.resource.data.unitPrice is number
+        && request.resource.data.unitPrice >= 0 && request.resource.data.unitPrice <= 5000000
+        && request.resource.data.total == request.resource.data.quantity * request.resource.data.unitPrice
+        && request.resource.data.date is string
+        && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if false;
+    }
+
+    function slotPathFor(d) {
+      return /databases/$(database)/documents/disponibilidad/$(d.barberoId + '_' + d.date + '_' + d.time);
+    }
+
+    // Los clientes solo reservan a futuro. El personal también puede registrar
+    // citas que ya pasaron (hasta 31 días atrás), p. ej. reservas hechas
+    // directamente con el barbero.
+    function isValidCitaTime(d) {
+      return d.dateTime < request.time + duration.value(100, 'd')
+        && (d.dateTime > request.time
+            || (isStaff() && d.dateTime > request.time - duration.value(31, 'd')));
+    }
+
+    function isValidNewCita(citaId) {
+      let d = request.resource.data;
+      let barbero = /databases/$(database)/documents/empleados/$(d.barberoId);
+      return d.keys().hasOnly([
+          'barberoId', 'barberoName', 'serviceId', 'serviceName', 'serviceDuration',
+          'servicePrice', 'products', 'productIds', 'total', 'dateTime', 'date', 'time',
+          'customerName', 'customerPhone', 'status', 'createdAt',
+          'privacyConsent', 'privacyPolicyVersion'])
+        && d.status == 'pendiente'
+        && isShortString(d.customerName, 2, 80)
+        && d.customerPhone is string && d.customerPhone.matches('^[0-9+() -]{7,20}$')
+        && isShortString(d.barberoId, 1, 128)
+        && exists(barbero)
+        && get(barbero).data.get('active', true) != false
+        && isShortString(d.barberoName, 1, 80)
+        && isShortString(d.serviceId, 1, 80)
+        && isShortString(d.serviceName, 1, 120)
+        && isShortString(d.serviceDuration, 1, 40)
+        && d.servicePrice is number && d.servicePrice >= 0 && d.servicePrice <= 5000000
+        && d.products is list && d.products.size() <= 20
+        && (!('productIds' in d) || hasValidProductIds(d, citaId))
+        && d.total is number && d.total >= 0 && d.total <= 10000000
+        && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && d.time is string && d.time.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+        && d.dateTime is timestamp
+        && isValidCitaTime(d)
+        && d.createdAt == request.time
+        && d.privacyConsent == true
+        && isShortString(d.privacyPolicyVersion, 1, 20)
+        && getAfter(slotPathFor(d)).data.get('citaId', '') == citaId;
+    }
+
+    // El cliente (sin sesión) solo puede cancelar. Además del estado puede
+    // dejar constancia de cuándo y que fue él: cancelledAt / cancelledBy.
+    function isCustomerCancelling() {
+      let d = request.resource.data;
+      return onlyChanges(['status', 'cancelledAt', 'cancelledBy', 'cancelledByUid'])
+        && d.status == 'cancelada'
+        && resource.data.status in ['pendiente', 'confirmada']
+        && (!('cancelledAt' in d) || d.cancelledAt == request.time)
+        && (!('cancelledBy' in d) || d.cancelledBy == 'cliente')
+        && (!('cancelledByUid' in d) || d.cancelledByUid == '');
+    }
+
+    function ownsCita() {
+      return isStaff() && resource.data.barberoId == request.auth.uid;
+    }
+
+    match /citas/{citaId} {
+      allow get: if true;
+      allow list: if isAdmin() || ownsCita();
+      allow create: if isValidNewCita(citaId);
+      allow update: if isAdmin()
+                    || (ownsCita() && request.resource.data.barberoId == resource.data.barberoId)
+                    || isCustomerCancelling();
+      allow delete: if isAdmin() || ownsCita();
+    }
+
+    function isValidSlotFor(slotId) {
+      let d = request.resource.data;
+      let cita = /databases/$(database)/documents/citas/$(d.citaId);
+      return d.keys().hasOnly(['barberoId', 'date', 'time', 'status', 'citaId'])
+        && d.status == 'pendiente'
+        && d.barberoId is string && d.date is string && d.time is string
+        && slotId == d.barberoId + '_' + d.date + '_' + d.time
+        && isShortString(d.citaId, 1, 128)
+        && existsAfter(cita)
+        && getAfter(cita).data.barberoId == d.barberoId
+        && getAfter(cita).data.date == d.date
+        && getAfter(cita).data.time == d.time;
+    }
+
+    function isReleasedByCancelledCita() {
+      return onlyChanges(['status'])
+        && request.resource.data.status == 'cancelada'
+        && resource.data.get('citaId', '') != ''
+        && getAfter(/databases/$(database)/documents/citas/$(resource.data.citaId)).data.status == 'cancelada';
+    }
+
+    match /disponibilidad/{slotId} {
+      allow read: if true;
+      allow create: if isStaff() || isValidSlotFor(slotId);
+      allow update: if isStaff()
+                    || (resource.data.status == 'cancelada' && isValidSlotFor(slotId))
+                    || isReleasedByCancelledCita();
+      allow delete: if isStaff();
+    }
+
+    // ---- Auditoría -----------------------------------------------------------
+    // Registro de movimientos de la página (src/lib/audit.ts). Solo el super
+    // admin lo lee y NADIE puede editar ni borrar un registro: ni el admin ni
+    // el propio super admin desde la app.
+    function isValidAuditShape(d) {
+      return d.keys().hasOnly([
+          'at', 'action', 'category', 'summary', 'source', 'userAgent',
+          'actorType', 'actorUid', 'actorName', 'actorRole',
+          'citaId', 'customerName', 'customerPhone', 'barberoId', 'targetId',
+          'changes', 'data'])
+        && d.at == request.time
+        && d.action is string && d.action.matches('^[a-z_]{2,20}[.][a-z_]{2,30}$')
+        && d.category in ['cita', 'cliente', 'empleado', 'producto', 'servicio', 'horario', 'venta', 'sesion']
+        && isShortString(d.summary, 1, 500)
+        && d.source in ['web', 'panel']
+        && d.userAgent is string && d.userAgent.size() <= 300
+        && d.actorName is string && d.actorName.size() <= 120
+        && d.citaId is string && d.citaId.size() <= 128
+        && d.customerName is string && d.customerName.size() <= 80
+        && d.customerPhone is string && d.customerPhone.size() <= 20
+        && d.barberoId is string && d.barberoId.size() <= 128
+        && d.targetId is string && d.targetId.size() <= 128
+        && (!('changes' in d) || d.changes is map)
+        && (!('data' in d) || d.data is map);
+    }
+
+    // Personal y super admin: el log siempre queda a nombre de quien está logueado.
+    function isPersonalAudit(d) {
+      return d.actorType == 'personal'
+        && (isStaff() || isSuperAdmin())
+        && d.actorUid == request.auth.uid
+        && d.actorRole in ['admin', 'empleado', 'superadmin'];
+    }
+
+    // Cliente (sin sesión): solo se acepta si en ESTE mismo lote se creó o se
+    // canceló una cita real, o se registró un cliente nuevo. Así nadie puede
+    // llenar la auditoría de registros inventados.
+    function clientePath(phoneId) {
+      return /databases/$(database)/documents/clientes/$(phoneId);
+    }
+
+    function isCustomerAudit(d) {
+      return d.actorType == 'cliente'
+        && d.actorUid == ''
+        && d.actorRole == 'cliente'
+        && d.source == 'web'
+        && ((d.action == 'cita.creada'
+              && isShortString(d.citaId, 1, 128)
+              && existsAfter(citaPath(d.citaId))
+              && getAfter(citaPath(d.citaId)).data.createdAt == request.time)
+          || (d.action == 'cita.cancelada'
+              && isShortString(d.citaId, 1, 128)
+              && exists(citaPath(d.citaId))
+              && get(citaPath(d.citaId)).data.status != 'cancelada'
+              && getAfter(citaPath(d.citaId)).data.status == 'cancelada')
+          || (d.action == 'cliente.registrado'
+              && isShortString(d.targetId, 7, 20)
+              && !exists(clientePath(d.targetId))
+              && existsAfter(clientePath(d.targetId))
+              && getAfter(clientePath(d.targetId)).data.createdAt == request.time));
+    }
+
+    match /auditoria/{logId} {
+      allow read: if isSuperAdmin();
+      allow create: if isValidAuditShape(request.resource.data)
+                    && (isPersonalAudit(request.resource.data) || isCustomerAudit(request.resource.data));
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

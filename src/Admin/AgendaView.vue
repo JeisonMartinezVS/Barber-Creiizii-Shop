@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth'
 import { formatLocalDate, formatTime12, getSlotId, stockDeltaForStatusChange, useBookingStore } from '../stores/booking'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
 import RescheduleModal from '../components/dashboard/RescheduleModal.vue'
+import { deleteCita, updateCitaStatus } from '../lib/citaAudit'
 
 const authStore = useAuthStore()
 const bookingStore = useBookingStore() // reutiliza su lista en vivo de `barberos` para el filtro
@@ -183,7 +184,7 @@ async function setStatus(cita: Cita, status: CitaStatus) {
   // se cancela o "no asistió" el producto vuelve al inventario; si se
   // reactiva, se descuenta de nuevo.
   const batch = writeBatch(db)
-  batch.update(doc(db, 'citas', cita.id), { status })
+  updateCitaStatus(batch, authStore.auditActor, cita, status)
   const delta = stockDeltaForStatusChange(cita.status, status)
   if (delta !== 0) {
     for (const productId of cita.productIds ?? []) {
@@ -270,7 +271,7 @@ async function confirmDelete() {
   try {
     // Eliminar una cita pendiente o confirmada devuelve sus productos al stock.
     const batch = writeBatch(db)
-    batch.delete(doc(db, 'citas', cita.id))
+    deleteCita(batch, authStore.auditActor, cita)
     if (cita.status === 'pendiente' || cita.status === 'confirmada') {
       for (const productId of cita.productIds ?? []) {
         batch.update(doc(db, 'productos', productId), { stock: increment(1), stockCitaId: cita.id })
