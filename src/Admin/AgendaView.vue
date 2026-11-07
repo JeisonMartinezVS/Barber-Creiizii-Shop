@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { collection, doc, increment, onSnapshot, orderBy, query, setDoc, where, writeBatch } from 'firebase/firestore'
+import { collection, doc, increment, onSnapshot, orderBy, query, where, writeBatch } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { useAuthStore } from '../stores/auth'
-import { formatLocalDate, formatTime12, getSlotId, stockDeltaForStatusChange, useBookingStore } from '../stores/booking'
+import { formatLocalDate, formatTime12, stockDeltaForStatusChange, useBookingStore } from '../stores/booking'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
 import RescheduleModal from '../components/dashboard/RescheduleModal.vue'
-import { deleteCita, updateCitaStatus } from '../lib/citaAudit'
+import { deleteCita, releaseSlotIfOwned, updateCitaStatus } from '../lib/citaAudit'
 
 const authStore = useAuthStore()
 const bookingStore = useBookingStore() // reutiliza su lista en vivo de `barberos` para el filtro
@@ -163,17 +163,6 @@ function onDocumentClick(e: MouseEvent) {
 onMounted(() => document.addEventListener('click', onDocumentClick))
 onUnmounted(() => document.removeEventListener('click', onDocumentClick))
 
-async function releaseSlot(cita: Cita) {
-  await setDoc(
-    doc(db, 'disponibilidad', getSlotId(cita.barberoId, cita.date, cita.time)),
-    { status: 'cancelada' },
-    { merge: true },
-  ).catch(() => {
-    // Si el documento del horario nunca existió (p. ej. una cita creada antes
-    // de esta función), no hay nada que liberar: se puede ignorar.
-  })
-}
-
 // Mensaje visible cuando una acción de la agenda falla (p. ej. sin stock).
 const actionError = ref('')
 
@@ -192,6 +181,8 @@ async function setStatus(cita: Cita, status: CitaStatus) {
     }
   }
   try {
+    // Al cancelar, su horario queda libre en el mismo lote (si aún es suyo).
+    if (status === 'cancelada') await releaseSlotIfOwned(batch, cita)
     await batch.commit()
   } catch (err) {
     console.error('No se pudo cambiar el estado de la cita', err)
@@ -201,7 +192,6 @@ async function setStatus(cita: Cita, status: CitaStatus) {
         : 'No se pudo cambiar el estado de la cita. Intenta de nuevo.'
     return
   }
-  if (status === 'cancelada') await releaseSlot(cita)
 }
 
 // --- Cambiar hora (p. ej. el cliente llegó antes) -----------------------------
@@ -277,8 +267,8 @@ async function confirmDelete() {
         batch.update(doc(db, 'productos', productId), { stock: increment(1), stockCitaId: cita.id })
       }
     }
+    await releaseSlotIfOwned(batch, cita)
     await batch.commit()
-    await releaseSlot(cita)
     citaToDelete.value = null
   } catch (err) {
     console.error('No se pudo eliminar la cita', err)

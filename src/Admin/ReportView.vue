@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { collection, doc, increment, onSnapshot, query, setDoc, where, writeBatch } from 'firebase/firestore'
+import { collection, doc, increment, onSnapshot, query, where, writeBatch } from 'firebase/firestore'
 import { db } from '../config/firebase'
 import { useAuthStore } from '../stores/auth'
-import { formatLocalDate, formatTime12, getSlotId, stockDeltaForStatusChange, useBookingStore } from '../stores/booking'
+import { formatLocalDate, formatTime12, stockDeltaForStatusChange, useBookingStore } from '../stores/booking'
 import DashboardStats from '../components/dashboard/DashboardStats.vue'
-import { deleteCita, updateCitaStatus } from '../lib/citaAudit'
+import { deleteCita, releaseSlotIfOwned, updateCitaStatus } from '../lib/citaAudit'
 
 const authStore = useAuthStore()
 const bookingStore = useBookingStore() // lista viva de barberos, para el selector del admin
@@ -267,16 +267,6 @@ const STATUS_ACTIONS: CitaStatus[] = ['pendiente', 'confirmada', 'completada', '
 
 const actionError = ref('')
 
-async function releaseSlot(cita: Cita) {
-  await setDoc(
-    doc(db, 'disponibilidad', getSlotId(cita.barberoId, cita.date, cita.time)),
-    { status: 'cancelada' },
-    { merge: true },
-  ).catch(() => {
-    // Si el documento del horario nunca existió no hay nada que liberar.
-  })
-}
-
 // Cambiar estado: el ajuste de stock va en el mismo lote que la cita.
 const citaToStatus = ref<Cita | null>(null)
 const isChangingStatus = ref(false)
@@ -303,8 +293,9 @@ async function setStatus(status: CitaStatus) {
     }
   }
   try {
+    // Al cancelar, su horario queda libre en el mismo lote (si aún es suyo).
+    if (status === 'cancelada') await releaseSlotIfOwned(batch, cita)
     await batch.commit()
-    if (status === 'cancelada') await releaseSlot(cita)
   } catch (err) {
     console.error('No se pudo cambiar el estado de la cita', err)
     actionError.value =
@@ -342,8 +333,8 @@ async function confirmDelete() {
         batch.update(doc(db, 'productos', productId), { stock: increment(1), stockCitaId: cita.id })
       }
     }
+    await releaseSlotIfOwned(batch, cita)
     await batch.commit()
-    await releaseSlot(cita)
   } catch (err) {
     console.error('No se pudo eliminar la cita', err)
     actionError.value = 'No se pudo eliminar la cita. Intenta de nuevo.'

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { doc, getDoc, Timestamp, writeBatch } from 'firebase/firestore'
+import { doc, Timestamp, writeBatch } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import { addAudit, citaRefs } from '../../lib/audit'
+import { isSlotTaken, releaseSlotIfOwned } from '../../lib/citaAudit'
 import { useAuthStore } from '../../stores/auth'
 import {
   buildTimeSlots,
@@ -76,10 +77,15 @@ async function save() {
   error.value = ''
   const { cita } = props
   const time = newTime.value
-  const oldSlotRef = doc(db, 'disponibilidad', getSlotId(cita.barberoId, cita.date, cita.time))
   try {
-    // Citas antiguas pueden no tener su horario guardado: solo se libera si existe.
-    const oldSlot = await getDoc(oldSlotRef)
+    // Nunca se pisa un horario que ya es de otra cita (alguien pudo tomarlo
+    // mientras el modal estaba abierto).
+    if (await isSlotTaken(cita.barberoId, cita.date, time, cita.id)) {
+      newTime.value = ''
+      error.value = 'Ese horario se acaba de ocupar. Elige otro.'
+      await loadSlots()
+      return
+    }
     const batch = writeBatch(db)
     batch.set(doc(db, 'disponibilidad', getSlotId(cita.barberoId, cita.date, time)), {
       barberoId: cita.barberoId,
@@ -88,7 +94,8 @@ async function save() {
       status: 'pendiente',
       citaId: cita.id,
     })
-    if (oldSlot.exists()) batch.set(oldSlotRef, { status: 'cancelada' }, { merge: true })
+    // La hora anterior solo se libera si todavía es de esta cita.
+    const oldSlotReleased = await releaseSlotIfOwned(batch, cita)
     batch.update(doc(db, 'citas', cita.id), {
       time,
       dateTime: Timestamp.fromDate(combineDateAndTime(day.value, time)),
@@ -99,7 +106,7 @@ async function save() {
       summary: `${authStore.auditActor.actorName} cambió la hora de la cita de ${cita.customerName} (${cita.date}) de ${formatTime12(cita.time)} a ${formatTime12(time)}`,
       ...citaRefs(cita),
       changes: { time: { from: cita.time, to: time } },
-      data: { date: cita.date, serviceName: cita.serviceName, barberoName: cita.barberoName ?? '', oldSlotReleased: oldSlot.exists() },
+      data: { date: cita.date, serviceName: cita.serviceName, barberoName: cita.barberoName ?? '', oldSlotReleased },
     })
     await batch.commit()
     emit('saved', `La cita de ${cita.customerName} ahora es a las ${formatTime12(time)}. Las ${formatTime12(cita.time)} quedaron libres.`)

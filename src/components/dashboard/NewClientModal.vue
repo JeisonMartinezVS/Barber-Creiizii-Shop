@@ -13,6 +13,7 @@ import {
 import { db } from '../../config/firebase'
 import { PRIVACY_POLICY_VERSION } from '../../content/legalVersion'
 import { addAudit } from '../../lib/audit'
+import { isSlotTaken } from '../../lib/citaAudit'
 import { useAuthStore } from '../../stores/auth'
 import {
   buildTimeSlots,
@@ -266,7 +267,14 @@ async function save() {
     const time = form.time
 
     // Igual que en el modal público: cita y horario en un solo lote atómico,
-    // así nunca se reserva dos veces el mismo horario.
+    // así nunca se reserva dos veces el mismo horario. Antes se confirma que
+    // nadie lo tomó mientras se llenaba el formulario.
+    if (await isSlotTaken(barbero.id, dateStr, time)) {
+      await refreshBookedTimes()
+      form.time = ''
+      error.value = 'Ese horario se acaba de ocupar. Elige otro.'
+      return
+    }
     const citaRef = doc(collection(db, 'citas'))
     const chosenProducts = selectedProducts.value
     const batch = writeBatch(db)

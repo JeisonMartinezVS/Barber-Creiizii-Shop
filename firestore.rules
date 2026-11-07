@@ -246,10 +246,26 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/citas/$(resource.data.citaId)).data.status == 'cancelada';
     }
 
+    // El personal libera un horario solo si su cita ya no lo usa: se canceló,
+    // se eliminó o se movió a otra hora en este mismo lote. Así nunca se libera
+    // el horario de OTRA persona que lo reservó después (reserva doble).
+    function isStaffReleasingSlot() {
+      let citaId = resource.data.get('citaId', '');
+      return onlyChanges(['status'])
+        && request.resource.data.status == 'cancelada'
+        && (citaId == ''
+            || !existsAfter(citaPath(citaId))
+            || getAfter(citaPath(citaId)).data.status == 'cancelada'
+            || getAfter(citaPath(citaId)).data.date != resource.data.date
+            || getAfter(citaPath(citaId)).data.time != resource.data.time);
+    }
+
     match /disponibilidad/{slotId} {
       allow read: if true;
       allow create: if isStaff() || isValidSlotFor(slotId);
-      allow update: if isStaff()
+      // Un horario ocupado no se pisa: solo se vuelve a ocupar uno libre
+      // (cancelado) o se libera cuando su cita ya no lo usa.
+      allow update: if (isStaff() && (resource.data.status == 'cancelada' || isStaffReleasingSlot()))
                     || (resource.data.status == 'cancelada' && isValidSlotFor(slotId))
                     || isReleasedByCancelledCita();
       allow delete: if isStaff();
